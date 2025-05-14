@@ -7,7 +7,7 @@ This R project accompanies the analysis for the manuscript titled "SCALE-DEPENDE
 [...short description...]
 
 
-## Installation Instructions
+## A. Installation Instructions
 
 To get started with this project, you can either download the folder directly or clone the repository using Git. The project is set up to work with the R programming language and requires certain packages to be installed. Please follow the instructions below to set up your environment:
 
@@ -48,7 +48,7 @@ install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOpt
 cmdstanr::install_cmdstan()
 ```
 
-## 2. Project Structure
+## B. Project Structure
 
 The project directory this Readme is associated with, contains the workflow from the cleaned data, all the way to  the final analyses.
 The project structure distinguishes three kinds of folders:
@@ -154,6 +154,8 @@ This folder contains the analysis scripts and documentation for the Bayesian ana
 #### 05_Supplementary_Information
 [...]
 
+
+## C. Whatever...?
 
 
 
