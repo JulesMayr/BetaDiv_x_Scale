@@ -1,0 +1,301 @@
+---
+title: "Data Analysis Using a Hierarchical Bayesian Apprpoach"
+output: html_document
+---
+
+```{r General Settings, include=FALSE}
+# include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
+
+# General Settings
+knitr::opts_chunk$set(echo = TRUE)
+# Sets the R markdown options so that the code is displayed in the final html file. If it is set to FALSE then the code isn't displayed only the result is 
+
+rm(list=ls()) #clear global environment
+
+options(stringsAsFactors = F)
+#to make sure that all strings are treated as characters and not factors unless specified
+
+```
+
+```{r Load Libraries and Data, include=FALSE}
+
+# load libraries
+library(tidyverse)  # tidy data for data manipulation and visualization 
+library(tidybayes)  # tidy data for Bayesian models
+library(knitr)      # data manipulation
+library(cowplot)    # for nice plot layout
+library(brms)       # fitting Bayesian models
+library(bayesplot)  # visualization of Bayesian models
+library(rstan)      # bayesian models
+library(cmdstanr)   # using the more-up-to-date cmdstanr instead of rstan as the underlying MCMC engine to avoid ***recursive gc invocation warnings
+library(bayestestR) # helpful for some initial plotting 
+library(see)        # the plots in the above package don't work without this 
+library(loo)        # to do leave one out checks
+library(MetBrewer)  # pretty colors
+
+# load custom functions
+source("../02_functions/CustomFunctions.R")
+              
+#load data
+load("../01_data/03_derived/scaling_data.RData")
+
+```
+
+# 1. Normalize Spatial Asynchrony data
+
+```{r remove outliers and normalize data}
+filtered_data <- remove_outliers(data=scaling_data, vars=c("Spatial_AS","Gamma_stab"), quantile_cutoff = 0.997)
+filtered_data <- normalize_min_max(data=filtered_data, var="Spatial_AS", epsilon = 0.0001, new_var_name = "Spatial_AS_normalized_exclusive_1")
+```
+
+```{r}
+max(filtered_data$Spatial_AS)
+max(filtered_data$Gamma_stab)
+```
+
+
+Visualize data:
+
+```{r density plots of response variables}
+
+## Spatial_AS ------------------------------------------------------------------
+
+### Original data ==============================================================
+
+ggplot(filtered_data, aes(x = Spatial_AS)) +
+  geom_histogram(aes(y = after_stat(density)), color = "black", fill = "grey", alpha = 0.7) +
+  geom_density(color = "darkblue", linewidth = 1) +
+  labs(x = "Spatial Asynchrony", y = "Density") +
+  theme_bw()+
+  theme(axis.title = element_text(size = 20, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black"),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.position = "none",
+        axis.ticks = element_line(colour="black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour="black", fill=NA))
+
+### Normalized data ============================================================
+ggplot(filtered_data, aes(x = Spatial_AS_normalized_exclusive_1)) +
+  geom_histogram(aes(y = after_stat(density)), color = "black", fill = "grey", alpha = 0.7) +
+  geom_density(color = "darkblue", linewidth = 1) +
+  labs(x = "Normalized Spatial Asynchrony", y = "Density") +
+  theme_bw()+
+  theme(axis.title = element_text(size = 20, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black"),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.position = "none",
+        axis.ticks = element_line(colour="black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour="black", fill=NA))
+
+## Gamma_stab ------------------------------------------------------------------
+
+### Original data ==============================================================
+
+ggplot(filtered_data, aes(x = Gamma_stab)) +
+  geom_histogram(aes(y = after_stat(density)), color = "black", fill = "grey", alpha = 0.7) +
+  geom_density(color = "darkblue", linewidth = 1) +
+  labs(x = "Gamma Stability", y = "Density") +
+  theme_bw()+
+  theme(axis.title = element_text(size = 20, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black"),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.position = "none",
+        axis.ticks = element_line(colour="black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour="black", fill=NA))
+
+### Log-transformed data =======================================================
+
+filtered_data$log.gamma <- log(filtered_data$Gamma_stab+1)
+
+ggplot(filtered_data, aes(x = log.gamma)) +
+  geom_histogram(aes(y = after_stat(density)), color = "black", fill = "grey", alpha = 0.7) +
+  geom_density(color = "darkblue", linewidth = 1) +
+  labs(x = "Gamma Stability (log)", y = "Density") +
+  theme_bw()+
+  theme(axis.title = element_text(size = 20, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black"),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.position = "none",
+        axis.ticks = element_line(colour="black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour="black", fill=NA))
+
+
+```
+
+# 2. Descriptive statistics
+
+Some of these are used in the main text as examples.
+
+```{r calculate general descriptive statistics}
+
+# Calculate mean and SE for each variable across levels of div
+filtered_data %>%
+  group_by(div) %>%
+  dplyr::summarise(
+    n = n(),  # Number of rows per group (sample size)
+    
+    Beta_div_mean = mean(Beta_div, na.rm = TRUE),
+    Beta_div_se = sd(Beta_div, na.rm = TRUE) / sqrt(n()),  # Standard error
+    
+    Spatial_AS_mean = mean(Spatial_AS, na.rm = TRUE),
+    Spatial_AS_se = sd(Spatial_AS, na.rm = TRUE) / sqrt(n()),  # Standard error
+    
+    Gamma_stab_mean = mean(Gamma_stab, na.rm = TRUE),
+    Gamma_stab_se = sd(Gamma_stab, na.rm = TRUE) / sqrt(n())  # Standard error
+  )
+```
+
+```{r specific examples for spatial asynchrony given beta diversity}
+
+# Calculate the average and SE of normalized spatial asynchrony for specific beta diversity values
+filtered_data %>%
+  filter(Beta_div == 1.5 | Beta_div == 6) %>%  # Filter for Beta_div = 1.5 or 6
+  group_by(Beta_div) %>%  # Group by Beta_div
+  summarise(
+    N_Spatial_AS_mean = mean(Spatial_AS_normalized_exclusive_1, na.rm = TRUE),  # Mean of Spatial_AS
+    N_Spatial_AS_se = sd(Spatial_AS_normalized_exclusive_1, na.rm = TRUE) / sqrt(n())  # Standard Error
+  )
+
+```
+
+```{r specific examples for gamma stability given spatial asynchrony}
+
+# Calculate the average and SE of gamma stability for specific spatial asynchrony values
+filtered_data %>%
+  mutate(Spatial_AS = round(Spatial_AS, 1)) %>%  # Round Spatial_AS to 1 decimal places
+  filter(Spatial_AS == 1 | Spatial_AS == 2) %>%  # Filter for Spatial_AS = 1.12 or 2.25
+  group_by(Spatial_AS) %>%  # Group by Spatial_AS
+  summarise(
+    Gamma_stab_mean = mean(Gamma_stab, na.rm = TRUE),  # Mean of Gamma_stab
+    Gamma_stab_se = sd(Gamma_stab, na.rm = TRUE) / sqrt(n())  # Standard Error
+  )
+
+```
+
+# 3. Hierarchical Bayesian models
+
+## A. Zero-inflated beta regression for spatial asynchrony
+
+Spatial Asynchrony roughly follows a beta distribution. We see that our normalization indeed retained the distribution of the data while allowing it fall between 0 and 1, which is needed to run a beta regression. Since Spatial Asynchrony is bound between 1 (inclusive) and infinity, we use a zero inflated beta regression. This allows our normalized variable to include 0, which allows for a more intuitive interpretation.
+
+```{r SA ~ BetaDiv}
+model.form <- brmsformula(Spatial_AS_normalized_exclusive_1 ~ Beta_div * Area + (1|div))
+SA_quantile <- brm(formula=model.form, 
+                       data=filtered_data,
+                       family=zero_inflated_beta(), 
+                       init = 0, #keeping the default keeps giving me errors
+                       backend="cmdstanr", # to use cmdstanr
+                       threads=threading(4), #for within-chain parallelization
+                       prior=NULL, #default
+                       chains=4, #number of Markov chains, default=4
+                       cores=getOption("mc.cores", 8), #default=1 
+                       warmup=1000,
+                       iter=4000,
+                       control=list(adapt_delta=0.999, #increasing adapt_delta should decrease/eliminate the number of divergent transitions
+                                    max_treedepth=15), #to increase tree depth to be larger than the default (=10)
+                       file="./models/SA_quantile.rds")
+```
+
+Metrics and Methods used for model validation can be found in the supplementary information folder, document Appendix S1.
+
+This spaghetti plot illustrates uncertainty in the modeled relationship between beta diversity and spatial asynchrony by showing individual draws from the posterior predictive distribution, with each line representing one possible realization. It is included here as an optional diagnostic, but is not shown in the manuscript or supplements.
+
+```{r spaghetti plot 1}
+
+hokusai.palette <- met.brewer("Hokusai1", 7)#we use the same palette as for the main text
+
+spaghetti_plot_SA <- filtered_data %>% #with faceting
+  add_epred_draws(SA_quantile, ndraws=800) %>% #only subsample for spaghetti plots - the smaller ndraws, the faster the code 
+  ggplot(aes(x=Beta_div, y=Spatial_AS_normalized_exclusive_1, color=Area))+
+  geom_line(aes(y=.epred, group=paste(Area, .draw)), alpha=0.2)+
+  facet_grid(.~div)+
+  xlab("Beta Diversity")+
+  ylab("Normalized Spatial Asynchrony")+
+  scale_fill_gradientn(name="Area", colors=hokusai.palette)+ #specifying the color palette used - for continuous variables
+  scale_colour_gradientn(name="Area", colors=hokusai.palette)+ #specifying the same color palette and label for fill and color
+  guides(color = guide_legend(override.aes = list(linewidth = 3, alpha=1)))+ #change legend aesthetics
+  theme(axis.title = element_text(size = 20, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 12,colour="black"),
+        axis.text.y = element_text(size = 12,colour="black"),
+        legend.text  = element_text(size = 15,colour="black"),
+        legend.title = element_text(size = 20,colour="black"),
+        legend.key.height = unit(0.6, "null"),
+        strip.text = element_text(size = 20),
+        axis.ticks = element_line(colour="black"),
+        panel.border = element_rect(colour="black", fill=NA))
+
+print(spaghetti_plot_SA)
+
+```
+
+## B. Lognormal regression for gamma stability
+
+Gamma stability is a positive, right-skewed variable. Its log-transformed values are roughly normally distributed, making a lognormal model an appropriate choice. 
+
+```{r GS ~ SA}
+model.form <- brmsformula(Gamma_stab ~ Spatial_AS * Area + (1|div))
+GS_quantile <- brm(formula=model.form, 
+                       data=filtered_data,
+                       family=lognormal(), 
+                       init = 0, #keeping the default keeps giving me errors
+                       backend="cmdstanr", # to use cmdstanr
+                       threads=threading(4), #for within-chain parallelization
+                       prior=NULL, #default
+                       chains=4, #number of Markov chains, default=4
+                       cores=getOption("mc.cores", 8), #default=1 
+                       warmup=1000,
+                       iter=4000,
+                       control=list(adapt_delta=0.999, #increasing adapt_delta should decrease/eliminate the number of divergent transitions
+                                    max_treedepth=15), #to increase tree depth to be larger than the default (=10)
+                       file="./models/GS_quantile.rds")
+
+```
+
+Again, Metrics and Methods used for model validation can be found in the supplementary information folder, document Appendix S1.
+
+```{r spaghetti plot 2}
+
+hokusai.palette <- met.brewer("Hokusai1", 7)
+
+spaghetti_plot_GS <- filtered_data %>% #with faceting
+  add_epred_draws(GS_quantile, ndraws=800) %>% #only subsample for spaghetti plots - the smaller ndraws, the faster the code ofc
+  ggplot(aes(x=Spatial_AS, y=Gamma_stab, color=Area))+
+  geom_line(aes(y=.epred, group=paste(Area, .draw)), alpha=0.2)+
+  facet_grid(.~div)+
+  xlab("Spatial Asynchrony")+
+  ylab("Gamma Stability")+
+  xlim(0.9,2.6)+
+  ylim(0,10)+
+  scale_fill_gradientn(name="Area", colors=hokusai.palette)+ #specifying the color palette used - for continuous variables
+  scale_colour_gradientn(name="Area", colors=hokusai.palette)+ #specifying the same color palette and label for fill and color
+  guides(color = guide_legend(override.aes = list(linewidth = 3, alpha=1)))+ #change legend aesthetics
+  theme(axis.title = element_text(size = 20, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black"),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.text  = element_text(size = 15,colour="black"),
+        legend.title = element_text(size = 20,colour="black"),
+        legend.key.height = unit(0.6, "null"),
+        strip.text = element_text(size = 20),
+        axis.ticks = element_line(colour="black"),
+        panel.border = element_rect(colour="black", fill=NA))
+
+print(spaghetti_plot_GS)
+
+```
+

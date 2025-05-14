@@ -1,0 +1,285 @@
+---
+title: "Appendix S1: BRMS models' validation"
+output: html_document
+---
+
+This document describes the output and validation of the statistical models presented in the main text.
+
+```{r General Settings, include=FALSE}
+# include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
+
+# General Settings
+knitr::opts_chunk$set(echo = F)
+# Sets the R markdown options so that the code is displayed in the final html file. If it is set to FALSE then the code isn't displayed only the result is 
+
+rm(list=ls()) #clear global environment
+
+options(stringsAsFactors = F)
+#to make sure that all strings are treated as characters and not factors unless specified
+
+```
+
+```{r Load Libraries and Data, include=FALSE}
+
+# load libraries
+
+library(tidyverse)  # tidy data for data manipulation and visualization
+library(tidybayes)  # tidy data for Bayesian models
+library(knitr)      # data manipulation
+library(cowplot)    # for nice plot layout
+library(brms)       # fitting Bayesian models
+library(bayesplot)  # visualization of Bayesian models
+library(rstan)      # bayesian models
+library(cmdstanr)   # using the more-up-to-date cmdstanr instead of rstan as the underlying MCMC engine to avoid ***recursive gc invocation warnings
+library(bayestestR) # helpful for some initial plotting 
+library(see)        # the plots in the above package don't work without this 
+library(loo)        # to do leave one out checks
+library(MetBrewer)  # pretty colors
+
+                  
+# load custom functions
+source("../02_functions/CustomFunctions.R")
+
+#load data
+load("../01_data/03_derived/scaling_data.RData")
+
+```
+
+```{r}
+theme_set(theme_tidybayes() + panel_border())
+```
+
+```{r remove outliers and normalize data}
+filtered_data <- remove_outliers(data=scaling_data, vars=c("Spatial_AS","Gamma_stab"), quantile_cutoff = 0.997)
+filtered_data <- normalize_min_max(data=filtered_data, var="Spatial_AS", epsilon = 0.0001, new_var_name = "Spatial_AS_normalized_offset")
+```
+
+# 1. Effects of Beta Diversity and Spatial Extent on Spatial Asynchrony
+
+```{r import model 1}
+model.SA<-readRDS("../04_bayesian_analysis/models/SA_quantile.rds")
+```
+
+
+## 1.1 Model and convergence diagnostics 
+
+**Table S1.1: Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
+
+```{r warning=FALSE}
+print(model.SA, digits = 3)
+```
+
+Note the `Rhat` summary column: variation from 1.0 indicates the the model did not converge.
+
+The Bayesian R-squared:
+```{r}
+bayes_R2(model.SA)
+```
+
+```{r message=FALSE}
+mcmc_trace(as.array(model.SA)) + 
+  scale_x_continuous(
+    breaks = function(x) seq(min(x), max(x), length.out = 3),  # Show 3 ticks
+    labels = function(x) sprintf("%.1f", x)  # Format ticks to 1 decimal place
+  )
+```
+
+**Figure S1.1: Trace plots allow visually assessing chain convergence.**
+
+## 1.2 Assessment of model fit and accuracy
+
+### 1.2.1 Posterior predictive checks
+
+We assess model fit using posterior predictive checks (PPC). PPCs compare the real data to the posterior distribution, conditioned on the observed data.
+
+#### 1.2.1.1 Density plot
+
+```{r}
+pp_check(model.SA, ndraws = 500) + 
+  theme_bw() + 
+  xlab("Normalized Spatial Asynchrony") +
+  ylab("Density")
+```
+
+**Figure S1.2: The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
+
+#### 1.2.1.2 Leave-One-Out Cross-Validation
+
+```{r warning=FALSE, message=FALSE}
+pp_check(model.SA, type="loo_pit")+ 
+  theme_bw() 
+```
+
+**Figure S1.3: The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
+
+
+### 1.2.2 Highest-density interval
+
+We report 89% instead of 95% following common Bayesian practices, as it provides a better balance of precision and interpretability (McElreath, 2020).
+
+```{r message=FALSE}
+my.hdi.1 <- hdi(model.SA, ci = 0.89)
+new_labels <- c( #create a vector with new parameter names that reflect the terminology of the ms
+  "b_Beta_div" = "Beta Diversity",
+  "b_Area" = "Spatial Extent",
+  "b_Beta_div:Area" = "Beta Diversity x Spatial Extent"
+)
+
+  plot(my.hdi.1)+
+  scale_y_discrete(labels = new_labels) # adjust labels
+
+```
+
+**Figure S1.4: We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
+
+
+## 1.3 The Hierarchical Effect of Species Richness on Spatial Asynchrony
+
+**Table S1.2: Summary table of the hierarchical effects of planted species richness on spatial asynchrony.**
+
+```{r}
+ranef(model.SA)
+```
+
+```{r}
+model.SA %>% spread_draws(r_div[div,]) %>% # Extracts the posterior draws for r_div by each level of div
+  ungroup() %>%
+  compare_levels(r_div, by = div) %>% # Compares posterior distributions of r_div across div levels
+  ggplot(aes(y = div, x = r_div)) +
+  stat_halfeye() +  # Adds a half-eye plot (density + credible intervals)
+  geom_vline(xintercept = 0, linetype = "dashed") +  # Adds a dashed vertical reference line at x = 0
+  # Axis labels
+  xlab("Posterior Random Effect Value") +
+  ylab("Levels of Planted Spcies\nRichness") +
+  # Plot aesthetics
+  theme(axis.title = element_text(size = 20, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black"),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.text  = element_text(size = 15,colour="black"),
+        legend.title = element_text(size = 20,colour="black"),
+        legend.key.width = unit(1, "cm"),  # Increase legend key width to show linetypes clearly
+        strip.text = element_text(size = 20),
+        axis.ticks = element_line(colour="black"),
+        panel.border = element_rect(colour="black", fill=NA))
+
+```
+
+**Figure S1.5. Posterior distributions of the random effects of planted species richness levels on gamma stability, comparing differences between species richness levels.** Black points represent posterior medians, and horizontal black lines indicate the 66% and 95% credible intervals. The dashed vertical line at x = 0 serves as a reference for no difference. Deviations from zero indicate the magnitude and direction of the differences in spatial asynchrony between species richness levels.
+
+
+# 2. Effects of Spatial Asynchony and Spatial Extent on Gamma Stability
+
+```{r import model 2}
+model.GS<-readRDS("../04_bayesian_analysis/models/GS_quantile.rds")
+```
+
+## 2.1 Model and convergence diagnostics 
+
+**Table S1.3: Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
+
+```{r warning=FALSE}
+print(model.GS, digits = 3)
+```
+
+Note the `Rhat` summary column: variation from 1.0 indicates the the model did not converge.
+
+The Bayesian R-squared:
+```{r}
+bayes_R2(model.GS)
+```
+
+```{r message=FALSE}
+mcmc_trace(as.array(model.GS)) + 
+  scale_x_continuous(
+    breaks = function(x) seq(min(x), max(x), length.out = 3),  # Show 5 ticks
+    labels = function(x) sprintf("%.1f", x)  # Format ticks to 1 decimal place
+  )
+```
+
+**Figure S1.6: Trace plots allow visually assessing chain convergence.**
+
+## 2.2 Assessment of model fit and accuracy
+
+### 2.2.1 Posterior predictive checks
+
+We assess model fit using posterior predictive checks (PPC). PPCs compare the real data to the posterior distribution, conditioned on the observed data.
+
+#### 2.2.1.1 Density plot
+
+```{r}
+pp_check(model.GS, ndraws = 500) + 
+  theme_bw() + 
+  xlab("Gamma Stability") +
+  ylab("Density")
+```
+
+Figure S1.7: The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
+
+#### 2.2.1.2 Leave-One-Out Cross-Validation
+
+```{r warning=FALSE, message=FALSE}
+pp_check(model.GS, type="loo_pit")+ 
+  theme_bw() 
+```
+
+**Figure S1.8: The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
+
+
+### 2.2.2 Highest-density interval
+
+We report 89% instead of 95% following common Bayesian practices, as it provides a better balance of precision and interpretability (McElreath, 2020).
+
+```{r message=FALSE}
+my.hdi.1 <- hdi(model.GS, ci = 0.89)
+new_labels <- c( #create a vector with new parameter names that reflect the terminology of the ms
+  "b_Spatial_AS" = "Spatial Asynchrony",
+  "b_Area" = "Spatial Extent",
+  "b_Spatial_AS:Area" = "Spatial Asynchrony x Spatial Extent"
+)
+
+  plot(my.hdi.1)+
+  scale_y_discrete(labels = new_labels) # adjust labels
+
+```
+
+**Figure S1.9: We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
+
+
+## 2.3 The Hierarchical Effect of Species Richness on Spatial Asynchrony
+
+**Table S1.4: Summary table of the hierarchical effects of planted species richness on gamma stability.**
+
+```{r}
+ranef(model.GS) 
+```
+
+
+```{r}
+model.GS %>% spread_draws(r_div[div,]) %>% # Extracts the posterior draws for r_div by each level of div
+  ungroup() %>%
+  compare_levels(r_div, by = div) %>% # Compares posterior distributions of r_div across div levels
+  ggplot(aes(y = div, x = r_div)) +
+  stat_halfeye() +  # Adds a half-eye plot (density + credible intervals)
+  geom_vline(xintercept = 0, linetype = "dashed") +  # Adds a dashed vertical reference line at x = 0
+  # Axis labels
+  xlab("Posterior Random Effect Value") +
+  ylab("Levels of Planted Spcies\nRichness") +
+  # Plot aesthetics
+  theme(axis.title = element_text(size = 20, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black"),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.text  = element_text(size = 15,colour="black"),
+        legend.title = element_text(size = 20,colour="black"),
+        legend.key.width = unit(1, "cm"),  # Increase legend key width to show linetypes clearly
+        strip.text = element_text(size = 20),
+        axis.ticks = element_line(colour="black"),
+        panel.border = element_rect(colour="black", fill=NA))
+
+```
+
+**Figure S1.10. Posterior distributions of the random effects of planted species richness levels on gamma stability, comparing differences between species richness levels.** Black points represent posterior medians, and horizontal black lines indicate the 66% and 95% credible intervals. The dashed vertical line at x = 0 serves as a reference for no difference. Deviations from zero indicate the magnitude and direction of the differences in gamma stability between species richness levels.
+

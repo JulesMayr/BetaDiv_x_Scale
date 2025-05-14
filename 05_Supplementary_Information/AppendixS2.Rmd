@@ -1,0 +1,130 @@
+---
+title: "Appendix S2: Changes of Beta Diversity, Spatial Asynchrony and Gamma Stability with Spatial Extent"
+output: html_document
+---
+
+```{r General Settings, include=FALSE}
+# include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
+
+# General Settings
+knitr::opts_chunk$set(echo = F)
+# Sets the R markdown options so that the code is displayed in the final html file. If it is set to FALSE then the code isn't displayed only the result is 
+
+rm(list=ls()) #clear global environment
+
+options(stringsAsFactors = F)
+#to make sure that all strings are treated as characters and not factors unless specified
+
+```
+
+```{r Load Libraries and Data, include=FALSE}
+
+# load libraries
+library(tidyverse)  # tidy data for data manipulation and visualization
+library(tidybayes)  # tidy data for Bayesian models
+library(knitr)      # data manipulation
+library(MetBrewer)  # pretty colors
+
+# load custom functions
+source("../02_functions/CustomFunctions.R")
+                  
+# load data
+load("../01_data/03_derived/scaling_data.RData")
+
+```
+
+```{r set theme for figure}
+theme_set(theme_tidybayes())
+```
+
+```{r remove outliers and normalize data}
+filtered_data <- remove_outliers(data=scaling_data, vars=c("Spatial_AS","Gamma_stab"), quantile_cutoff = 0.997)
+filtered_data <- normalize_min_max(data=filtered_data, var="Spatial_AS", epsilon = 0.0001, new_var_name = "Spatial_AS_normalized_exclusive_1")
+```
+
+```{r message=FALSE}
+
+filtered_data$area.factor <- as.factor(filtered_data$Area)
+filtered_data$div.factor <- as.factor(filtered_data$div)
+
+# compute mean and se for variables of interest
+summary_stats <- filtered_data %>%
+  group_by(area.factor, div.factor) %>%
+  dplyr::summarise(
+    #Beta_div
+    Beta.div_mean = mean(Beta_div, na.rm = TRUE),
+    Beta.div_se = sd(Beta_div, na.rm = TRUE) / sqrt(n()),
+    #Spatial_AS
+    Spatial.AS_mean = mean(Spatial_AS, na.rm = TRUE),
+    Spatial.AS_se = sd(Spatial_AS, na.rm = TRUE) / sqrt(n()),
+    #Gamma_stab
+    Gamma.stab_mean = mean(Gamma_stab, na.rm = TRUE),
+    Gamma.stab_se = sd(Gamma_stab, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  #reshape into longer format
+  pivot_longer(cols = -c(area.factor, div.factor), 
+               names_to = c("metric", ".value"), 
+               names_sep = "_")
+```
+
+```{r plot 1}
+
+hokusai.palette <- met.brewer("Hokusai1", 2)
+
+ggplot(summary_stats %>% filter(metric %in% c("Beta.div", "Spatial.AS")), 
+       aes(x = area.factor, y = mean, color = metric, group = metric)) +
+  geom_point(size = 3) +  
+  geom_line(linewidth = 1) +  
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +  
+  facet_grid(~ div.factor)+
+  xlab("Spatial Extent")+
+  ylab("Mean (± SE)")+
+  scale_fill_manual(name = "Variable", values = hokusai.palette, labels = c("Beta Diversity", "Spatial Asynchrony")) +  # Custom labels
+  scale_colour_manual(name = "Variable", values = hokusai.palette, labels = c("Beta Diversity", "Spatial Asynchrony")) +   
+  theme_bw() +
+  theme(axis.title = element_text(size = 15, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 10,colour="black"),
+        axis.text.y = element_text(size = 10,colour="black"),
+        legend.text  = element_text(size = 10,colour="black"),
+        legend.title = element_text(size = 15,colour="black"),
+        strip.text = element_text(size = 15),
+        axis.ticks = element_line(colour="black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour="black", fill=NA))
+```
+
+**Figure S2.1: The average change in beta diversity and spatial asynchrony (± standard error) across spatial extents.** Spatial extent corresponds to the number of aggregated communities. Planted species richness levels are represented in the panels.
+
+```{r}
+hokusai.palette <- met.brewer("Hokusai1", 2)
+
+ggplot(summary_stats %>% filter(metric %in% c("Gamma.stab", "Spatial.AS")), 
+       aes(x = area.factor, y = mean, color = metric, group = metric)) +
+  geom_point(size = 3) +  
+  geom_line(linewidth = 1) +  
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +  
+  facet_grid(~ div.factor)+
+  xlab("Spatial Extent")+
+  ylab("Mean (± SE)")+
+  scale_fill_manual(name = "Variable", values = hokusai.palette, labels = c("Gamma Stability", "Spatial Asynchrony")) +  # Custom labels
+  scale_colour_manual(name = "Variable", values = hokusai.palette, labels = c("Gamma Stability", "Spatial Asynchrony")) +   
+  theme_bw() +
+  theme(axis.title = element_text(size = 15, colour = "black"), #to modify axes appearance
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 10,colour="black"),
+        axis.text.y = element_text(size = 10,colour="black"),
+        legend.text  = element_text(size = 10,colour="black"),
+        legend.title = element_text(size = 15,colour="black"),
+        strip.text = element_text(size = 15),
+        axis.ticks = element_line(colour="black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour="black", fill=NA))
+
+```
+
+**Figure S2.2: The average change in spatial asynchrony and gamma stability (± standard error) across spatial extents.** Spatial extent corresponds to the number of aggregated communities. Planted species richness levels are represented in the panels.
+
+

@@ -1,0 +1,66 @@
+---
+title: "Data Collation"
+output: html_document
+---
+
+Here I combine the temporary datasets that were derived during the simulation.
+
+```{r Setup, include=FALSE}
+
+# include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
+
+knitr::opts_chunk$set(echo = TRUE)
+# Sets the R markdown options so that the code is displayed in the final html file. If it is set to FALSE then the code isn't displayed only the result is 
+
+rm(list=ls()) #clears my global environment
+
+# Load libraries
+library(knitr) 
+library(tidyverse) # data manipulation
+
+# Load temporary datasets derived from simulation
+load("../01_data/02_temporary/beta1_ScaleManipulation_unique_11sp.RData")
+load("../01_data/02_temporary/stability_betamax_areamax__60samplesperdiv_11sp.RData")
+load("../01_data/02_temporary/betaANDscale_manipulation_11sp.RData")
+
+options(stringsAsFactors = F)
+#to make sure that all strings are treated as characters and not factors unless specified
+
+
+```
+
+```{r combine datasets}
+
+betaANDscale_manipulation_11sp$sampleID <- as.character(betaANDscale_manipulation_11sp$sampleID)
+stability_betamax_areamax__60samplesperdiv_11sp$sampleID <- as.character(stability_betamax_areamax__60samplesperdiv_11sp$sampleID)
+
+one_data <- bind_rows(Beta1_ScaleManipulation_unique_11sp, stability_betamax_areamax__60samplesperdiv_11sp, betaANDscale_manipulation_11sp)
+
+#take out div=12
+one_data <- one_data[one_data$div!=12,]
+
+#calculate gamma diversity
+  #richness-based
+one_data <- one_data %>% 
+  rowwise() %>% 
+  mutate(Gamma_div = prod(avg_richness,Beta_div)) %>% 
+  mutate(Gamma_InvSimpson = prod(Alpha_InvSimpson,Beta_InvSimpson))
+
+```
+
+Remove data with Area = 1
+
+Because the alpha scale is equal to the gamma scale when Area = 1, and because there cannot be any beta diversity or spatial asynchrony at the community scale, including these data does not make sense. Instead, these data could be seen as an exercise and a control which makes sure that the various calculations are performed correctly.
+
+```{r remove all data on area=1}
+
+scaling_data<- filter(one_data, Area!= 1)
+
+```
+
+``` {r save}
+
+#save full data
+save(scaling_data, file = "../01_data/03_derived/scaling_data.RData")
+
+```

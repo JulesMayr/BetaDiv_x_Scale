@@ -1,0 +1,121 @@
+---
+title: 'Part1: Beta Diversity = 1 and Area = 1'
+output: html_document
+---
+
+While all documents in the 02_simulation folder can be seen as one big simulation, to make it easier to think through, it is split up into several different parts (stability metrics are always calculated):
+This is Part1: Calculating stability metrics at the sub-plot level, which represents stability at the smallest scale (Area = 1). 
+
+**Note: Because the alpha scale is equal to the gamma scale when Area = 1, and because there cannot be any beta diversity or spatial asynchrony at the community scale, the data produced in this step should be seen as an exercise and a control which makes sure that the various calculations are performed correctly. However, they are not included in the analyses**
+  
+```{r Setup, results = FALSE} 
+
+# include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
+
+knitr::opts_chunk$set(echo = TRUE)
+# Sets the R markdown options so that the code is displayed in the final html file. If it is set to FALSE then the code isn't displayed only the result is 
+
+rm(list=ls()) #clears my global environment 
+
+# Load libraries
+library(vegan) # calculate diversity metrics - without this package the Wang et al. Function does not work
+library(dplyr) # data manipulation
+library(tidyr) # data manipulation
+library(knitr) # data manipulation
+
+#load data
+load("../01_data/02_temporary/sim_data_11sp.RData")
+
+
+#load VariancePartitioning Function for the calculation of stability metrics
+source("../02_functions/Wang_et_al_2019_VariancePartitioning.r")
+
+options(stringsAsFactors = F)
+#to make sure that all strings are treated as characters and not factors unless specified
+
+```
+
+Retrieve Stability metrics at the sub-plot level
+
+```{r beta_div1 & Area1, results = FALSE}
+
+# create new dataframe to store stability metrics per scale
+variability_data_scale1 <- data.frame(sampleID=character(), CompID=character(), div=numeric(), Species_var=numeric(), Alpha_var=numeric(),  
+                                      Metapopulation_var=numeric(),  Gamma_var=numeric(), Pop_synch=numeric(), Spatial_synch=numeric(), 
+                                      Species_synch=numeric(), Metapopulation_synch=numeric(), avg_richness=numeric(), A_Invsimpson=numeric(), Beta_div=numeric(), 
+                                      B_Invsimpson=numeric(), temp_mean=numeric(), temp_sd=numeric())
+    ## species_var == species variability or population variability
+    ## these are all variability metrics --> stability is the inverse of variability
+
+subplot_IDs <- unique(sim_data_11sp$unique_ID)
+
+# for every subplot_ID:
+for (i in 1:length(subplot_IDs)){
+  datax = sim_data_11sp[sim_data_11sp$unique_ID==subplot_IDs[i],] # selects a subset from sim_data_11sp --> this subset contains rows only for sample i
+  
+  if(nrow(datax)==5){ # tests if there is data for all years, because some subplots only have data for one or two years --> 4 because 4 years of data
+    # create a temporary dataset to store selected information 
+    temp <- datax[1,c("unique_ID", "sown_species_comp", "div")]
+    
+    TH.year = 5      ### the number of years to be used 
+    TH.plot = 1      ### for the number of communities 
+    
+    arrayx = array(NA,dim=c(ncol(datax)-5,TH.year,TH.plot)) # -5 to take only the abundance per species data 
+    # datax has 16 columns in total --> 16 - 5 = 11 --> 11 species in BioCliVE (because ca and ra are taken out)
+    # arrayx creates a multi-dimensional array of NA's
+          ## the number of communities (TH.plot) gives the number of dimensions - when TH.plot = 2 (at scale 2 the number of communities is 2), then there will be 2 matrices
+                ### for each community a matrix is created with 11 rows (1 for each species) and 4 columns (1 for each year)
+    
+    # fill in this array based on datax, by community and by year
+    plotindex = sort(unique(datax$unique_ID))
+    yearindex = sort(unique(datax$year))
+    
+    for(i in 1:TH.plot) #to loop across the matrices (#TH.plot) 
+      for(j in 1:TH.year){ #to loop through the years
+        tmpdata = datax[datax$unique_ID==plotindex[i] & datax$year==yearindex[j],-c(1:5)] 
+        # -c(1:5) makes sure that those columns are disregarded as they do not contain biomass data across years for the individual species
+        arrayx[,j,i] = unlist(tmpdata) 
+      }
+    
+    # Now the variance partitioning function can be applied to this array to obtain the desired variability metrics
+    var_part_result = var.partition(arrayx) #var.partition after Wang et al. 2019
+  
+    # extract metrics of interest
+    my_metrics <- var_part_result[c(1:9,11,14:17)]
+    
+    # store these metrics in a temporary dataframe 
+    variability_temp <- t(as.data.frame(my_metrics))
+    
+    # combine the temporary dataframes to resemble the structure of the empty dataframe created above
+    temp <- cbind(temp,variability_temp)
+    
+    # add new data from this loop to the last data
+    variability_data_scale1 <- rbind(variability_data_scale1,temp)
+  }
+}
+
+# add Area and rearrange
+variability_data_scale1$Areasize <- as.numeric(rep(1, nrow(variability_data_scale1))) 
+variability_data_scale1 <- variability_data_scale1[,c(18,1:17)]
+
+# change column names 
+colnames(variability_data_scale1) <- c("Area", "sampleID", "CompID", "div", "Species_var", "Alpha_var",  "Metapopulation_var",  "Gamma_var", "Pop_synch", "Spatial_synch", "Species_synch", "Metapopulation_synch", "avg_richness", "Alpha_InvSimpson", "Beta_div", "Beta_InvSimpson", "temp_mean", "temp_sd")
+
+# convert variability to stability
+  stability_conversion <- apply(variability_data_scale1[,5:12],c(1,2), function(x) 1/x) # stability is the inverse of variability
+  # change colnames accordingly
+  colnames(stability_conversion) <- c("Species_stab","Alpha_stab","Metapopulation_stab","Gamma_stab","Pop_AS","Spatial_AS","Species_AS","Metapopulation_AS") 
+  stability_data_scale1_11sp <- cbind(variability_data_scale1[,1:4],stability_conversion,variability_data_scale1[,13:18])
+  
+#add a column indicating the intended Beta diversity level for my own reference
+  #this might be more important for later when I manipulate scale and area, but I will add it here nevertheless 
+ stability_data_scale1_11sp$Intended_BetaDiv <- as.numeric(rep(1, nrow( stability_data_scale1_11sp))) 
+
+```
+
+```{r , results = FALSE}
+
+# save as .RData so that it is easier to re-use
+save(stability_data_scale1_11sp, file = "../01_data/02_temporary/stability_data_scale1_11sp.RData")
+
+```

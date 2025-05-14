@@ -1,0 +1,1224 @@
+---
+title: 'Part 4: Simulate the Maximum Beta Diversity for each Area'
+output: html_document
+---
+
+This is part 4, where we aggregate subplots with different species compositions to obtain the maximum beta diversity for each area 
+  ** i.e. beta diversity = 2 and Area = 2 etc. until beta diversity = 8 and Area = 8
+  ** this is the final step of the simulation and is represented by the upper diagonal of Figure 1 in the main text
+  
+**NOTE**: The entire script cannot be run in one single time as it includes what we call "Intermezzi" where we restart the R session and clear the global environment to not overload R's memory. 
+
+```{r Setup, results = FALSE} 
+
+knitr::opts_chunk$set(echo = TRUE)
+# Sets the R markdown options so that the code is displayed in the final html file. If it is set to FALSE then the code isn't displayed only the result is 
+
+rm(list=ls()) #clears my global environment 
+
+# Load libraries
+library(vegan) # calculate diversity metrics - without this package the Wang et al. Function does not work
+library(dplyr) # data manipulation
+library(tidyr) # data manipulation
+library(knitr) # data manipulation
+
+#load data
+load("../01_data/02_temporary/sim_data_11sp.RData")
+
+
+#load VariancePartitioning Function for the calculation of stability metrics
+source("../02_functions/Wang_et_al_2019_VariancePartitioning.r")
+
+options(stringsAsFactors = F)
+#to make sure that all strings are treated as characters and not factors unless specified
+
+```
+
+# Step 1. Separate years and then species compositions so that we can subsample within them. 
+
+```{r divide dataset into lists, results = FALSE}
+
+sim_data_11sp$total.biomass<-rowSums(sim_data_11sp[,6:16]) #calculate total biomass for every row (i.e. sample)
+
+year.id<-c(1:5) #create a vector containing all the years
+comp.id<-factor(unique(sim_data_11sp$sown_species_comp)) #create a vector containing all the species compositions once
+data.list.year<-lapply(year.id, function(x) sim_data_11sp[sim_data_11sp$year==x,]) #subset sim_data_11sp by years and store that data as lists in year.id with one list for each year --> data.list.year is a list of 4
+
+#create a list of 4 (one list for each year), each containing a list of 43 (one list for each species composition)
+data.list.comp<-vector(mode="list") # create an empty list to store data in for each species composition
+for(i in year.id){ #for every year
+  data.list.comp[[i]]=vector(mode="list", length=length(comp.id)) #create a list for all species compositions
+  data.list.comp[[i]]<-lapply(comp.id, function(x) data.list.year[[i]][data.list.year[[i]]$sown_species_comp==x,]) # subset data by year and species composition
+}
+
+#create smaller dataset needed for all following steps in this part of the simulation
+year1_data <-sim_data_11sp[sim_data_11sp$year==1,] #subset the dataframe to only contain year 1
+
+#unite plotID's and composition codes so that I can then extract that information faster and more easily
+beta_sim_data_11sp <- unite(sim_data_11sp, col = "plotID_comp", c(3,5), sep = "_") 
+
+```
+
+```{r set seed}
+
+set.seed(123)
+
+```
+
+# Step 2. Aggregate plots to always have the maximum beta diversity for each area
+
+## A. Beta Diversity = 2 & Area = 2
+
+```{r beta_div2 & Area2, results = FALSE}
+
+### 1. Create combinations of species compositions #############################
+
+A=2 #because we assemble 2 subplots
+
+#make a list of all of pairwise combinations of species compositions within diversity levels
+sim_beta_max<-beta_sim_data_11sp%>% #assigning beta_sim_data_11sp to a new dataframe 
+  filter(year==1, div==c(1,4,8))%>% #subsetting diversity levels 
+                                    #I also added div=8 as it does not necessarily slow down the code and I thought it could still be interesting
+  group_by(div) %>% #grouping the data by diversity and year
+  do(as_tibble(t(combn(.$plotID_comp, m = A)))) %>% #creating all the unique combinations of subplots within diversity levels
+  ungroup() %>% 
+  setNames(sub("V", "plotID_comp", colnames(.)))%>% #changing the column names so that they make sense
+  distinct%>% #filters out any rows that are duplicated
+  separate("plotID_comp1", c("Unique_ID1", "comp1"), sep = "_")%>%  #separate plot ID's and composition codes to filter out unwanted combinations
+  separate(c("plotID_comp2"), c("Unique_ID2", "comp2"), sep = "_")%>%
+  filter(comp1 != comp2)  #filters out (removes) any row where the comp used is used more than once per combination, in more than 1 column
+
+
+#sim_beta_max is still a very large dataframe that contains all unique combinations of plot IDs without using the same species composition twice
+#this is especially the case for larger areas
+#therefore it is maybe best to sample now to reduce the memory pressure 
+
+## take a sample of size n for each diversity level to reduce sim_beta_max to a size that does not put too much memory pressure on R 
+
+#sampling within diversity levels and plot ID's n times
+data.combos.sampled<-sim_beta_max%>% #assign to a new dataframe
+  group_by(div, Unique_ID1)%>% #group by div and plot ID of column 1
+  sample_n(10, replace = TRUE) #when also grouping by Unique_ID the sample size must be 1 if replace = F
+                               #but by setting replace = T any Unique_ID for that column can be sampled more than once. 
+
+
+#add sample ID 
+data.combos.sampled$sampleID <- 1:nrow(data.combos.sampled)
+
+## create a dataframe where I store all sampled species combinations so that I can take the same plots for all years 
+
+#create a dataframe
+sampled_plotIDs <- as.data.frame(data.combos.sampled[,c('Unique_ID1', 'Unique_ID2')])
+
+#add sample ID 
+sampled_plotIDs$sampleID <- 1:nrow(sampled_plotIDs)
+
+### 2. Take the same plots for all years #######################################
+
+# make empty dataframe to store my data
+data_beta_max_area <- data.frame(year=numeric(), block=numeric(), unique_ID=character(), div=numeric(), sown_species_comp=character(), an=numeric(), ar=numeric(), lu=numeric(), or=numeric(), po=numeric(), tr=numeric(), ve=numeric(), fe=numeric(), ru=numeric(), ho=numeric(), kn=numeric(), total.biomass=numeric(), sampleID=numeric())
+
+for (j in 1:5){ # loops across the years
+  for(i in 1:nrow(sampled_plotIDs)){ # loops across our samples
+
+    # create a temporary dataset that contains all data for the plots of sample i for year j
+    temp <- rbind(data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,1],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,2],])
+    
+    if(nrow(temp)==A){ # test if data is present since some species combinations are gone in years 2 and 3
+      temp$sampleID <- sampled_plotIDs[i,A+1] #add sampleID
+      # add our new data from this run of the loop to the last data
+      data_beta_max_area <- rbind(data_beta_max_area,temp) # add the new data to the old data 
+    }
+  } 
+}
+
+### 3. Calculate Variability metrics ###########################################
+
+# create new dataframe to store stability metrics per scale
+variability_data <- data.frame(sampleID=numeric(), CompID=character(), div=numeric(), Species_var=numeric(), Alpha_var=numeric(),  
+                               Metapopulation_var=numeric(), Gamma_var=numeric(), Pop_synch=numeric(), Spatial_synch=numeric(), Species_synch=numeric(), 
+                               Metapopulation_synch=numeric(), avg_richness=numeric(), A_Invsimpson=numeric(), Beta_div=numeric(), B_Invsimpson=numeric(), temp_mean=numeric(), temp_sd=numeric())
+## species_var == species variability or population variability
+## these are all variability metrics --> stability is the inverse of variability
+
+#for every landscape (=unique sample id):
+for (i in 1:length(unique(data_beta_max_area$sampleID))){ 
+  
+  datax = data_beta_max_area[data_beta_max_area$sampleID==i,] # selects a subset from data_beta_max_area data --> this subset contains rows only for sample i
+  
+  if(nrow(datax)==(A*5)){ # tests if there is data for all years, because some subplots only have data for one or two years 
+    # create a temporary dataset to store selected information with
+    temp <- datax[1,c("sampleID", "sown_species_comp", "div")]
+    
+    TH.year = 5      ### the number of years to be used 
+    TH.plot = A      ### for the number of communities --> = area size
+    
+    arrayx = array(NA,dim=c(ncol(datax)-7,TH.year,TH.plot)) # -7 to take only the abundance per species data 
+    # datax has 18 columns in total --> 18 - 7 = 11 --> 11 species in BioCliVE (because ca and ra are taken out) 
+    # arrayx creates a multi-dimensional array of NA's
+    ## the number of communities (TH.plot) gives the number of dimensions - when TH.plot = 2 (at scale 2 the number of communities is 2), then there will be 2 matrices
+    ### for each community a matrix is created with 11 rows (1 for each species) and 4 columns (1 for each year)
+    
+    # fill in this array based on datax, by community and by year
+    plotindex = sort(unique(datax$unique_ID))
+    yearindex = sort(unique(datax$year))
+    
+    for(i in 1:TH.plot) #to loop across the matrices (#TH.plot) 
+      for(j in 1:TH.year){ #to loop through the years
+        tmpdata = datax[datax$unique_ID==plotindex[i] & datax$year==yearindex[j],-c(1:5,17:18)] 
+        # -c(1:5,17:18) makes sure that those columns are disregarded as they do not contain biomass data across years for the individual species
+        arrayx[,j,i] = unlist(tmpdata) 
+      }
+    
+    # Now the variance partitioning function can be applied to this array to obtain the desired variability metrics
+    var_part_result = var.partition(arrayx) #var.partition after Wang et al. 2019
+    
+    # extract metrics of interest
+       my_metrics <- var_part_result[c(1:9,11,14:17)]
+    
+    # store these metrics in a temporary dataframe 
+    variability_temp <- t(as.data.frame(my_metrics))
+    
+    # combine the temporary dataframes to resemble the structure of the empty dataframe created above
+    temp <- cbind(temp,variability_temp)
+    
+    # add new data from this loop to the last data
+    variability_data <- rbind(variability_data,temp)
+    
+  }
+}
+
+# add Area and rearrange
+variability_data$Areasize <- as.numeric(rep(A, nrow(variability_data)))
+variability_data <-variability_data[,c(18,1:17)]
+
+# change column names 
+colnames(variability_data) <- c("Area", "sampleID", "CompID", "div", "Species_var", "Alpha_var",  "Metapopulation_var",  "Gamma_var", "Pop_synch", "Spatial_synch", "Species_synch", "Metapopulation_synch", "avg_richness", "Alpha_InvSimpson", "Beta_div", "Beta_InvSimpson", "temp_mean", "temp_sd")
+
+# convert variability to stability
+stability_conversion <- apply(variability_data[,5:12],c(1,2), function(x) 1/x) # stability is the inverse of variability
+colnames(stability_conversion) <- c("Species_stab","Alpha_stab","Metapopulation_stab","Gamma_stab","Pop_AS","Spatial_AS","Species_AS","Metapopulation_AS")
+stability_beta2_scale2_11sp <- cbind(variability_data[,1:4],stability_conversion,variability_data[,13:18])
+
+#add a column indicating the intended Beta diversity level for my own reference
+stability_beta2_scale2_11sp$Intended_BetaDiv <- as.numeric(rep(A, nrow(stability_beta2_scale2_11sp)))
+
+#create a main dataframe for this Part4 where I add data for each beta diversity level and area
+stability_betamax_areamax_11sp <- stability_beta2_scale2_11sp
+
+```
+
+## B. Beta Diversity = 3 & Area = 3
+
+```{r beta_div3 & Area3, results = FALSE}
+
+### 1. Create combinations of species compositions #############################
+
+A=3 #because we assemble 3 subplots
+
+#make a list of all of pairwise combinations of species compositions within diversity levels
+sim_beta_max<-beta_sim_data_11sp%>% #assigning beta_sim_data_11sp to a new dataframe 
+  filter(year==1, div==c(1,4,8))%>% #subsetting diversity levels 
+  group_by(div) %>% #grouping the data by diversity and year
+  do(as_tibble(t(combn(.$plotID_comp, m = A)))) %>% #creating all the unique combinations of subplots within diversity levels
+  ungroup() %>% 
+  setNames(sub("V", "plotID_comp", colnames(.)))%>% #changing the column names so that they make sense
+  distinct%>% #filters out any rows that are duplicated
+  separate("plotID_comp1", c("Unique_ID1", "comp1"), sep = "_")%>% #separate plot ID's and composition codes to filter out unwanted combinations
+  separate("plotID_comp2", c("Unique_ID2", "comp2"), sep = "_")%>%
+  separate("plotID_comp3", c("Unique_ID3", "comp3"), sep = "_")%>%
+  filter(comp1 != comp2 & 
+           comp1 != comp3 & 
+           comp2 != comp3) #filters out (removes) any row where the comp used is used more than once per combination
+
+## take a sample of size n for each diversity level to reduce sim_beta_max to a size that does not put too much memory pressure on R 
+
+#sampling within diversity levels and plot ID's n times
+data.combos.sampled<-sim_beta_max%>% #assign to a new dataframe
+  group_by(div, Unique_ID1)%>% 
+  sample_n(10, replace = TRUE) 
+
+#add sample ID 
+data.combos.sampled$sampleID <- 1:nrow(data.combos.sampled)
+
+## create a dataframe where I store all sampled species combinations so that I can take the same plots for all years 
+
+#create a dataframe 
+sampled_plotIDs <- as.data.frame(data.combos.sampled[,c('Unique_ID1', 'Unique_ID2', 'Unique_ID3')])
+
+#add sample ID 
+sampled_plotIDs$sampleID <- 1:nrow(sampled_plotIDs)
+
+### 2. Take the same plots for all years #######################################
+# make empty dataframe to store my data
+data_beta_max_area <- data.frame(year=numeric(), block=numeric(), unique_ID=character(), div=numeric(), sown_species_comp=character(), an=numeric(), ar=numeric(), lu=numeric(), or=numeric(), po=numeric(), tr=numeric(), ve=numeric(), fe=numeric(), ru=numeric(), ho=numeric(), kn=numeric(), total.biomass=numeric(), sampleID=numeric())
+
+for (j in 1:5){ # loops across the years
+  for(i in 1:nrow(sampled_plotIDs)){ # loops across our samples
+
+    # create a temporary dataset that contains all data for the plots of sample i for year j
+    temp <- rbind(data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,1],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,2],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,3],])
+    
+    if(nrow(temp)==A){ # test if data is present since some species combinations are gone in years 2 and 3
+      temp$sampleID <- sampled_plotIDs[i,A+1] #add sampleID
+      # add our new data from this run of the loop to the last data
+      data_beta_max_area <- rbind(data_beta_max_area,temp) # add the new data to the old data 
+    }
+  } 
+}
+
+### 3. Calculate Variability metrics ###########################################
+
+# create new dataframe to store stability metrics per scale
+variability_data <- data.frame(sampleID=numeric(), CompID=character(), div=numeric(), Species_var=numeric(), Alpha_var=numeric(), 
+                               Metapopulation_var=numeric(), Gamma_var=numeric(), Pop_synch=numeric(), Spatial_synch=numeric(), Species_synch=numeric(), 
+                               Metapopulation_synch=numeric(), avg_richness=numeric(),  Beta_div=numeric(), B_Invsimpson=numeric(), temp_mean=numeric(), temp_sd=numeric())
+## species_var == species variability or population variability
+## these are all variability metrics --> stability is the inverse of variability
+
+
+#for every landscape (=unique sample id):
+for (i in 1:length(unique(data_beta_max_area$sampleID))){ 
+  
+  datax = data_beta_max_area[data_beta_max_area$sampleID==i,] # selects a subset from data_beta_max_area data --> this subset contains rows only for sample i
+  
+  if(nrow(datax)==(A*5)){ # tests if there is data for all years, because some subplots only have data for one or two years 
+    # create a temporary dataset to store selected information with
+    temp <- datax[1,c("sampleID", "sown_species_comp", "div")]
+    
+    TH.year = 5      ### the number of years to be used 
+    TH.plot = A      ### for the number of communities --> = area size
+    
+    arrayx = array(NA,dim=c(ncol(datax)-7,TH.year,TH.plot)) # -7 to take only the abundance per species data 
+    # datax has 18 columns in total --> 18 - 7 = 11 --> 11 species in BioCliVE (because ca and ra are taken out) 
+    # arrayx creates a multi-dimensional array of NA's
+    ## the number of communities (TH.plot) gives the number of dimensions - when TH.plot = 2 (at scale 2 the number of communities is 2), then there will be 2 matrices
+    ### for each community a matrix is created with 11 rows (1 for each species) and 4 columns (1 for each year)
+    
+    # fill in this array based on datax, by community and by year
+    plotindex = sort(unique(datax$unique_ID))
+    yearindex = sort(unique(datax$year))
+    
+    for(i in 1:TH.plot) #to loop across the matrices (#TH.plot) 
+      for(j in 1:TH.year){ #to loop through the years
+        tmpdata = datax[datax$unique_ID==plotindex[i] & datax$year==yearindex[j],-c(1:5,17:18)] 
+        # -c(1:5,17:18) makes sure that those columns are disregarded as they do not contain biomass data across years for the individual species
+        arrayx[,j,i] = unlist(tmpdata) 
+      }
+    
+    # Now the variance partitioning function can be applied to this array to obtain the desired variability metrics
+    var_part_result = var.partition(arrayx) #var.partition after Wang et al. 2019
+    
+    # extract metrics of interest
+       my_metrics <- var_part_result[c(1:9,11,14:17)]
+    
+    # store these metrics in a temporary dataframe 
+    variability_temp <- t(as.data.frame(my_metrics))
+    
+    # combine the temporary dataframes to resemble the structure of the empty dataframe created above
+    temp <- cbind(temp,variability_temp)
+    
+    # add new data from this loop to the last data
+    variability_data <- rbind(variability_data,temp)
+    
+  }
+}
+
+# add Area and rearrange
+variability_data$Areasize <- as.numeric(rep(A, nrow(variability_data)))
+variability_data <-variability_data[,c(18,1:17)]
+
+# change column names 
+colnames(variability_data) <- c("Area", "sampleID", "CompID", "div", "Species_var", "Alpha_var",  "Metapopulation_var",  "Gamma_var", "Pop_synch", "Spatial_synch", "Species_synch", "Metapopulation_synch", "avg_richness", "Alpha_InvSimpson", "Beta_div", "Beta_InvSimpson", "temp_mean", "temp_sd")
+
+# convert variability to stability
+stability_conversion <- apply(variability_data[,5:12],c(1,2), function(x) 1/x) # stability is the inverse of variability
+colnames(stability_conversion) <- c("Species_stab","Alpha_stab","Metapopulation_stab","Gamma_stab","Pop_AS","Spatial_AS","Species_AS","Metapopulation_AS")
+stability_beta3_scale3_11sp <- cbind(variability_data[,1:4],stability_conversion,variability_data[,13:18])
+
+#add a column indicating the intended Beta diversity level for my own reference
+stability_beta3_scale3_11sp$Intended_BetaDiv <- as.numeric(rep(A, nrow(stability_beta3_scale3_11sp)))
+
+# add this data to the main dataframe
+stability_betamax_areamax_11sp <- rbind(stability_betamax_areamax_11sp, stability_beta3_scale3_11sp)
+
+```
+
+## C. Beta Diversity = 4 & Area = 4
+
+```{r beta_div4 & Area4, results = FALSE}
+
+### 1. Create combinations of species compositions #############################
+
+A=4 #because we assemble 4 subplots
+
+#make a list of all of pairwise combinations of species compositions within diversity levels
+sim_beta_max<-beta_sim_data_11sp%>% #assigning beta_sim_data_11sp to a new dataframe 
+  filter(year==1, div==c(1,4,8))%>% #subsetting diversity levels 
+  group_by(div) %>% #grouping the data by diversity and year
+  do(as_tibble(t(combn(.$plotID_comp, m = A)))) %>% #creating all the unique combinations of subplots within diversity levels
+  ungroup() %>% 
+  setNames(sub("V", "plotID_comp", colnames(.)))%>% #changing the column names so that they make sense
+  distinct%>% #filters out any rows that are duplicated
+  separate("plotID_comp1", c("Unique_ID1", "comp1"), sep = "_")%>% #separate plot ID's and composition codes to filter out unwanted combinations
+  separate("plotID_comp2", c("Unique_ID2", "comp2"), sep = "_")%>%
+  separate("plotID_comp3", c("Unique_ID3", "comp3"), sep = "_")%>%
+  separate("plotID_comp4", c("Unique_ID4", "comp4"), sep = "_")%>%
+  filter(comp1 != comp2 & 
+           comp1 != comp3 & 
+           comp1 != comp4 & 
+           comp2 != comp3 & 
+           comp2 != comp4 & 
+           comp3 != comp4) #filters out (removes) any row where the comp used is used more than once per combination
+  
+## take a sample of size n for each diversity level to reduce sim_beta_max to a size that does not put too much memory pressure on R 
+
+#sampling within diversity levels and plot ID's n times
+data.combos.sampled<-sim_beta_max%>% #assign to a new dataframe
+  group_by(div, Unique_ID1)%>% #group by div and plot ID of column 1
+  sample_n(10, replace = TRUE)  
+
+#add sample ID 
+data.combos.sampled$sampleID <- 1:nrow(data.combos.sampled)
+
+## create a dataframe where I store all sampled species combinations so that I can take the same plots for all years 
+
+#create a dataframe 
+sampled_plotIDs <- as.data.frame(data.combos.sampled[,c('Unique_ID1', 'Unique_ID2', 'Unique_ID3', 'Unique_ID4')])
+
+#add sample ID 
+sampled_plotIDs$sampleID <- 1:nrow(sampled_plotIDs)
+
+### 2. Take the same plots for all years #######################################
+# make empty dataframe to store my data
+data_beta_max_area <- data.frame(year=numeric(), block=numeric(), unique_ID=character(), div=numeric(), sown_species_comp=character(), an=numeric(), ar=numeric(), lu=numeric(), or=numeric(), po=numeric(), tr=numeric(), ve=numeric(), fe=numeric(), ru=numeric(), ho=numeric(), kn=numeric(), total.biomass=numeric(), sampleID=numeric())
+
+for (j in 1:5){ # loops across the years
+  for(i in 1:nrow(sampled_plotIDs)){ # loops across our samples
+
+    # create a temporary dataset that contains all data for the plots of sample i for year j
+    temp <- rbind(data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,1],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,2],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,3],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,4],])
+    
+    if(nrow(temp)==A){ # test if data is present since some species combinations are gone in years 2 and 3
+      temp$sampleID <- sampled_plotIDs[i,A+1] #add sampleID
+      # add our new data from this run of the loop to the last data
+      data_beta_max_area <- rbind(data_beta_max_area,temp) # add the new data to the old data 
+    }
+  } 
+}
+
+### 3. Calculate Variability metrics ###########################################
+
+# create new dataframe to store stability metrics per scale
+variability_data <- data.frame(sampleID=numeric(), CompID=character(), div=numeric(), Species_var=numeric(), Alpha_var=numeric(),  Metapopulation_var=numeric(),  
+                               Gamma_var=numeric(), Pop_synch=numeric(), Spatial_synch=numeric(), Species_synch=numeric(), Metapopulation_synch=numeric(), avg_richness=numeric(), 
+                               Beta_div=numeric(), B_Invsimpson=numeric(), temp_mean=numeric(), temp_sd=numeric())
+## species_var == species variability or population variability
+## these are all variability metrics --> stability is the inverse of variability
+
+
+#for every landscape (=unique sample id):
+for (i in 1:length(unique(data_beta_max_area$sampleID))){ 
+  
+  datax = data_beta_max_area[data_beta_max_area$sampleID==i,] # selects a subset from data_beta_max_area data --> this subset contains rows only for sample i
+  
+  if(nrow(datax)==(A*5)){ # tests if there is data for all years, because some subplots only have data for one or two years 
+    # create a temporary dataset to store selected information with
+    temp <- datax[1,c("sampleID", "sown_species_comp", "div")]
+    
+    TH.year = 5      ### the number of years to be used 
+    TH.plot = A      ### for the number of communities --> = area size
+    
+    arrayx = array(NA,dim=c(ncol(datax)-7,TH.year,TH.plot)) # -7 to take only the abundance per species data 
+    # datax has 18 columns in total --> 18 - 7 = 11 --> 11 species in BioCliVE (because ca and ra are taken out) 
+    # arrayx creates a multi-dimensional array of NA's
+    ## the number of communities (TH.plot) gives the number of dimensions - when TH.plot = 2 (at scale 2 the number of communities is 2), then there will be 2 matrices
+    ### for each community a matrix is created with 11 rows (1 for each species) and 4 columns (1 for each year)
+    
+    # fill in this array based on datax, by community and by year
+    plotindex = sort(unique(datax$unique_ID))
+    yearindex = sort(unique(datax$year))
+    
+    for(i in 1:TH.plot) #to loop across the matrices (#TH.plot) 
+      for(j in 1:TH.year){ #to loop through the years
+        tmpdata = datax[datax$unique_ID==plotindex[i] & datax$year==yearindex[j],-c(1:5,17:18)] 
+        # -c(1:5,17:18) makes sure that those columns are disregarded as they do not contain biomass data across years for the individual species
+        arrayx[,j,i] = unlist(tmpdata) 
+      }
+    
+    # Now the variance partitioning function can be applied to this array to obtain the desired variability metrics
+    var_part_result = var.partition(arrayx) #var.partition after Wang et al. 2019
+    
+    # extract metrics of interest
+       my_metrics <- var_part_result[c(1:9,11,14:17)]
+    
+    # store these metrics in a temporary dataframe 
+    variability_temp <- t(as.data.frame(my_metrics))
+    
+    # combine the temporary dataframes to resemble the structure of the empty dataframe created above
+    temp <- cbind(temp,variability_temp)
+    
+    # add new data from this loop to the last data
+    variability_data <- rbind(variability_data,temp)
+    
+  }
+}
+
+# add Area and rearrange
+variability_data$Areasize <- as.numeric(rep(A, nrow(variability_data)))
+variability_data <-variability_data[,c(18,1:17)]
+
+# change column names 
+colnames(variability_data) <- c("Area", "sampleID", "CompID", "div", "Species_var", "Alpha_var",  "Metapopulation_var",  "Gamma_var", "Pop_synch", "Spatial_synch", "Species_synch", "Metapopulation_synch", "avg_richness", "Alpha_InvSimpson", "Beta_div", "Beta_InvSimpson", "temp_mean", "temp_sd")
+
+# convert variability to stability
+stability_conversion <- apply(variability_data[,5:12],c(1,2), function(x) 1/x) # stability is the inverse of variability
+colnames(stability_conversion) <- c("Species_stab","Alpha_stab","Metapopulation_stab","Gamma_stab","Pop_AS","Spatial_AS","Species_AS","Metapopulation_AS")
+stability_beta4_scale4_11sp <- cbind(variability_data[,1:4],stability_conversion,variability_data[,13:18])
+
+#add a column indicating the intended Beta diversity level for my own reference
+stability_beta4_scale4_11sp$Intended_BetaDiv <- as.numeric(rep(A, nrow(stability_beta4_scale4_11sp)))
+
+# add this data to the main dataframe
+stability_betamax_areamax_11sp <- rbind(stability_betamax_areamax_11sp, stability_beta4_scale4_11sp)
+
+```
+
+## D. Beta Diversity = 5 & Area = 5
+
+```{r beta_div5 & Area5, results = FALSE}
+
+### 1. Create combinations of species compositions #############################
+
+A=5 #because we assemble 5 subplots
+
+#make a list of all of pairwise combinations of species compositions within diversity levels
+sim_beta_max<-beta_sim_data_11sp%>% #assigning beta_sim_data_11sp to a new dataframe 
+  filter(year==1, div==c(1,4,8))%>% #subsetting diversity levels 
+  group_by(div) %>% #grouping the data by diversity and year
+  do(as_tibble(t(combn(.$plotID_comp, m = A)))) %>% #creating all the unique combinations of subplots within diversity levels
+  ungroup() %>% 
+  setNames(sub("V", "plotID_comp", colnames(.)))%>% #changing the column names so that they make sense
+  distinct%>% #filters out any rows that are duplicated
+  separate("plotID_comp1", c("Unique_ID1", "comp1"), sep = "_")%>% #separate plot ID's and composition codes to filter out unwanted combinations
+  separate("plotID_comp2", c("Unique_ID2", "comp2"), sep = "_")%>%
+  separate("plotID_comp3", c("Unique_ID3", "comp3"), sep = "_")%>%
+  separate("plotID_comp4", c("Unique_ID4", "comp4"), sep = "_")%>%
+  separate("plotID_comp5", c("Unique_ID5", "comp5"), sep = "_")%>%
+  filter(comp1 != comp2 & 
+           comp1 != comp3 & 
+           comp1 != comp4 & 
+           comp1 != comp5 & 
+           comp2 != comp3 & 
+           comp2 != comp4 & 
+           comp2 != comp5 & 
+           comp3 != comp4 &
+           comp3 != comp5 & 
+           comp4 != comp5) #filters out (removes) any row where the comp used is used more than once per combination
+  
+## take a sample of size n for each diversity level to reduce sim_beta_max to a size that does not put too much memory pressure on R 
+
+#sampling within diversity levels and plot ID's n times
+data.combos.sampled<-sim_beta_max%>% #assign to a new dataframe
+  group_by(div, Unique_ID1)%>% #group by div and plot ID of column 1
+  sample_n(10, replace = TRUE)  
+
+#add sample ID 
+data.combos.sampled$sampleID <- 1:nrow(data.combos.sampled)
+
+## create a dataframe where I store all sampled species combinations so that I can take the same plots for all years 
+
+#create a dataframe 
+sampled_plotIDs <- as.data.frame(data.combos.sampled[,c('Unique_ID1', 'Unique_ID2', 'Unique_ID3', 'Unique_ID4', 'Unique_ID5')])
+
+#add sample ID 
+sampled_plotIDs$sampleID <- 1:nrow(sampled_plotIDs)
+
+### 2. Take the same plots for all years #######################################
+# make empty dataframe to store my data
+data_beta_max_area <- data.frame(year=numeric(), block=numeric(), unique_ID=character(), div=numeric(), sown_species_comp=character(), an=numeric(), ar=numeric(), lu=numeric(), or=numeric(), po=numeric(), tr=numeric(), ve=numeric(), fe=numeric(), ru=numeric(), ho=numeric(), kn=numeric(), total.biomass=numeric(), sampleID=numeric())
+
+for (j in 1:5){ # loops across the years
+  for(i in 1:nrow(sampled_plotIDs)){ # loops across our samples
+
+    # create a temporary dataset that contains all data for the plots of sample i for year j
+    temp <- rbind(data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,1],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,2],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,3],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,4],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,5],])
+    
+    if(nrow(temp)==A){ # test if data is present since some species combinations are gone in years 2 and 3
+      temp$sampleID <- sampled_plotIDs[i,A+1] #add sampleID
+      # add our new data from this run of the loop to the last data
+      data_beta_max_area <- rbind(data_beta_max_area,temp) # add the new data to the old data 
+    }
+  } 
+}
+
+### 3. Calculate Variability metrics ###########################################
+
+# create new dataframe to store stability metrics per scale
+variability_data <- data.frame(sampleID=numeric(), CompID=character(), div=numeric(), Species_var=numeric(), Alpha_var=numeric(),  Metapopulation_var=numeric(),  
+                               Gamma_var=numeric(), Pop_synch=numeric(), Spatial_synch=numeric(), Species_synch=numeric(), Metapopulation_synch=numeric(), avg_richness=numeric(), 
+                               Beta_div=numeric(), B_Invsimpson=numeric(), temp_mean=numeric(), temp_sd=numeric())
+## species_var == species variability or population variability
+## these are all variability metrics --> stability is the inverse of variability
+
+
+#for every landscape (=unique sample id):
+for (i in 1:length(unique(data_beta_max_area$sampleID))){ 
+  
+  datax = data_beta_max_area[data_beta_max_area$sampleID==i,] # selects a subset from data_beta_max_area data --> this subset contains rows only for sample i
+  
+  if(nrow(datax)==(A*5)){ # tests if there is data for all years, because some subplots only have data for one or two years 
+    # create a temporary dataset to store selected information with
+    temp <- datax[1,c("sampleID", "sown_species_comp", "div")]
+    
+    TH.year = 5      ### the number of years to be used 
+    TH.plot = A      ### for the number of communities --> = area size
+    
+    arrayx = array(NA,dim=c(ncol(datax)-7,TH.year,TH.plot)) # -7 to take only the abundance per species data 
+    # datax has 18 columns in total --> 18 - 7 = 11 --> 11 species in BioCliVE (because ca and ra are taken out) 
+    # arrayx creates a multi-dimensional array of NA's
+    ## the number of communities (TH.plot) gives the number of dimensions - when TH.plot = 2 (at scale 2 the number of communities is 2), then there will be 2 matrices
+    ### for each community a matrix is created with 11 rows (1 for each species) and 4 columns (1 for each year)
+    
+    # fill in this array based on datax, by community and by year
+    plotindex = sort(unique(datax$unique_ID))
+    yearindex = sort(unique(datax$year))
+    
+    for(i in 1:TH.plot) #to loop across the matrices (#TH.plot) 
+      for(j in 1:TH.year){ #to loop through the years
+        tmpdata = datax[datax$unique_ID==plotindex[i] & datax$year==yearindex[j],-c(1:5,17:18)] 
+        # -c(1:5,17:18) makes sure that those columns are disregarded as they do not contain biomass data across years for the individual species
+        arrayx[,j,i] = unlist(tmpdata) 
+      }
+    
+    # Now the variance partitioning function can be applied to this array to obtain the desired variability metrics
+    var_part_result = var.partition(arrayx) #var.partition after Wang et al. 2019
+    
+    # extract metrics of interest
+       my_metrics <- var_part_result[c(1:9,11,14:17)]
+    
+    # store these metrics in a temporary dataframe 
+    variability_temp <- t(as.data.frame(my_metrics))
+    
+    # combine the temporary dataframes to resemble the structure of the empty dataframe created above
+    temp <- cbind(temp,variability_temp)
+    
+    # add new data from this loop to the last data
+    variability_data <- rbind(variability_data,temp)
+    
+  }
+}
+
+# add Area and rearrange
+variability_data$Areasize <- as.numeric(rep(A, nrow(variability_data)))
+variability_data <-variability_data[,c(18,1:17)]
+
+# change column names 
+colnames(variability_data) <- c("Area", "sampleID", "CompID", "div", "Species_var", "Alpha_var",  "Metapopulation_var",  "Gamma_var", "Pop_synch", "Spatial_synch", "Species_synch", "Metapopulation_synch", "avg_richness", "Alpha_InvSimpson", "Beta_div", "Beta_InvSimpson", "temp_mean", "temp_sd")
+
+# convert variability to stability
+stability_conversion <- apply(variability_data[,5:12],c(1,2), function(x) 1/x) # stability is the inverse of variability
+colnames(stability_conversion) <- c("Species_stab","Alpha_stab","Metapopulation_stab","Gamma_stab","Pop_AS","Spatial_AS","Species_AS","Metapopulation_AS")
+stability_beta5_scale5_11sp <- cbind(variability_data[,1:4],stability_conversion,variability_data[,13:18])
+
+#add a column indicating the intended Beta diversity level for my own reference
+stability_beta5_scale5_11sp$Intended_BetaDiv <- as.numeric(rep(A, nrow(stability_beta5_scale5_11sp)))
+
+# add this data to the main dataframe
+stability_betamax_areamax_11sp <- rbind(stability_betamax_areamax_11sp, stability_beta5_scale5_11sp)
+
+```
+
+## E. Beta Diversity = 6 & Area = 6
+
+```{r beta_div6 & Area6, results = FALSE}
+
+### 1. Create combinations of species compositions ##############################
+
+A=6 #because we assemble 6 subplots
+
+#make a list of all of pairwise combinations of species compositions within diversity levels
+sim_beta_max<-beta_sim_data_11sp%>% #assigning beta_sim_data_11sp to a new dataframe 
+  filter(year==1, div==c(1,4,8))%>% #subsetting diversity levels 
+  group_by(div) %>% #grouping the data by diversity and year
+  do(as_tibble(t(combn(.$plotID_comp, m = A)))) %>% #creating all the unique combinations of subplots within diversity levels
+  ungroup() %>% 
+  setNames(sub("V", "plotID_comp", colnames(.)))%>% #changing the column names so that they make sense
+  distinct%>% #filters out any rows that are duplicated
+  separate("plotID_comp1", c("Unique_ID1", "comp1"), sep = "_")%>% #separate plot ID's and composition codes to filter out unwanted combinations
+  separate("plotID_comp2", c("Unique_ID2", "comp2"), sep = "_")%>%
+  separate("plotID_comp3", c("Unique_ID3", "comp3"), sep = "_")%>%
+  separate("plotID_comp4", c("Unique_ID4", "comp4"), sep = "_")%>%
+  separate("plotID_comp5", c("Unique_ID5", "comp5"), sep = "_")%>%
+  separate("plotID_comp6", c("Unique_ID6", "comp6"), sep = "_")%>% 
+  filter(comp1 != comp2 & 
+           comp1 != comp3 & 
+           comp1 != comp4 & 
+           comp1 != comp5 & 
+           comp1 != comp6 & 
+           comp2 != comp3 & 
+           comp2 != comp4 & 
+           comp2 != comp5 & 
+           comp2 != comp6 & 
+           comp3 != comp4 &
+           comp3 != comp5 &
+           comp3 != comp6 & 
+           comp4 != comp5 &
+           comp4 != comp6 &
+           comp5 != comp6) #filters out (removes) any row where the comp used is used more than once per combination
+  
+## take a sample of size n for each diversity level to reduce sim_beta_max to a size that does not put too much memory pressure on R 
+
+#sampling within diversity levels and plot ID's n times
+data.combos.sampled<-sim_beta_max%>% #assign to a new dataframe
+  group_by(div, Unique_ID1)%>% #group by div and plot ID of column 1
+  sample_n(12, replace = TRUE) 
+
+#add sample ID 
+data.combos.sampled$sampleID <- 1:nrow(data.combos.sampled)
+
+## create a dataframe where I store all sampled species combinations so that I can take the same plots for all years 
+
+#create dataframe
+sampled_plotIDs <- as.data.frame(data.combos.sampled[,c('Unique_ID1', 'Unique_ID2', 'Unique_ID3', 'Unique_ID4', 'Unique_ID5', 'Unique_ID6')])
+
+#add sample ID 
+sampled_plotIDs$sampleID <- 1:nrow(sampled_plotIDs)
+
+### 2. Take the same plots for all years #######################################
+
+# make empty dataframe to store my data
+data_beta_max_area <- data.frame(year=numeric(), block=numeric(), unique_ID=character(), div=numeric(), sown_species_comp=character(), an=numeric(), ar=numeric(), lu=numeric(), or=numeric(), po=numeric(), tr=numeric(), ve=numeric(), fe=numeric(), ru=numeric(), ho=numeric(), kn=numeric(), total.biomass=numeric(), sampleID=numeric())
+
+for (j in 1:5){ # loops across the years
+  for(i in 1:nrow(sampled_plotIDs)){ # loops across our samples
+
+    # create a temporary dataset that contains all data for the plots of sample i for year j
+    temp <- rbind(data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,1],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,2],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,3],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,4],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,5],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,6],])
+    
+    if(nrow(temp)==A){ # test if data is present since some species combinations are gone in years 2 and 3
+      temp$sampleID <- sampled_plotIDs[i,A+1] #add sampleID
+      # add our new data from this run of the loop to the last data
+      data_beta_max_area <- rbind(data_beta_max_area,temp) # add the new data to the old data 
+    }
+  } 
+}
+
+### 3. Calculate Variability metrics ###########################################
+
+# create new dataframe to store stability metrics per scale
+variability_data <- data.frame(sampleID=numeric(), CompID=character(), div=numeric(), Species_var=numeric(), Alpha_var=numeric(),  Metapopulation_var=numeric(), Gamma_var=numeric(), Pop_synch=numeric(), Spatial_synch=numeric(), Species_synch=numeric(), Metapopulation_synch=numeric(), avg_richness=numeric(), A_Invsimpson=numeric(), Beta_div=numeric(), B_Invsimpson=numeric(), temp_mean=numeric(), temp_sd=numeric())
+## species_var == species variability or population variability
+## these are all variability metrics --> stability is the inverse of variability
+
+
+#for every landscape (=unique sample id):
+for (i in 1:length(unique(data_beta_max_area$sampleID))){ 
+  
+  datax = data_beta_max_area[data_beta_max_area$sampleID==i,] # selects a subset from data_beta_max_area data --> this subset contains rows only for sample i
+  
+  if(nrow(datax)==(A*5)){ # tests if there is data for all years, because some subplots only have data for one or two years 
+    # create a temporary dataset to store selected information with
+    temp <- datax[1,c("sampleID", "sown_species_comp", "div")]
+    
+    TH.year = 5      ### the number of years to be used 
+    TH.plot = A      ### for the number of communities --> = area size
+    
+    arrayx = array(NA,dim=c(ncol(datax)-7,TH.year,TH.plot)) # -7 to take only the abundance per species data 
+    # datax has 18 columns in total --> 18 - 7 = 11 --> 11 species in BioCliVE (because ca and ra are taken out) 
+    # arrayx creates a multi-dimensional array of NA's
+    ## the number of communities (TH.plot) gives the number of dimensions - when TH.plot = 2 (at scale 2 the number of communities is 2), then there will be 2 matrices
+    ### for each community a matrix is created with 11 rows (1 for each species) and 4 columns (1 for each year)
+    
+    # fill in this array based on datax, by community and by year
+    plotindex = sort(unique(datax$unique_ID))
+    yearindex = sort(unique(datax$year))
+    
+    for(i in 1:TH.plot) #to loop across the matrices (#TH.plot) 
+      for(j in 1:TH.year){ #to loop through the years
+        tmpdata = datax[datax$unique_ID==plotindex[i] & datax$year==yearindex[j],-c(1:5,17:18)] 
+        # -c(1:5,17:18) makes sure that those columns are disregarded as they do not contain biomass data across years for the individual species
+        arrayx[,j,i] = unlist(tmpdata) 
+      }
+    
+    # Now the variance partitioning function can be applied to this array to obtain the desired variability metrics
+    var_part_result = var.partition(arrayx) #var.partition after Wang et al. 2019
+    
+    # extract metrics of interest
+       my_metrics <- var_part_result[c(1:9,11,14:17)]
+    
+    # store these metrics in a temporary dataframe 
+    variability_temp <- t(as.data.frame(my_metrics))
+    
+    # combine the temporary dataframes to resemble the structure of the empty dataframe created above
+    temp <- cbind(temp,variability_temp)
+    
+    # add new data from this loop to the last data
+    variability_data <- rbind(variability_data,temp)
+    
+  }
+}
+
+# add Area and rearrange
+variability_data$Areasize <- as.numeric(rep(A, nrow(variability_data)))
+variability_data <-variability_data[,c(18,1:17)]
+
+# change column names 
+colnames(variability_data) <- c("Area", "sampleID", "CompID", "div", "Species_var", "Alpha_var",  "Metapopulation_var",  "Gamma_var", "Pop_synch", "Spatial_synch", "Species_synch", "Metapopulation_synch", "avg_richness", "Alpha_InvSimpson", "Beta_div", "Beta_InvSimpson", "temp_mean", "temp_sd")
+
+# convert variability to stability
+stability_conversion <- apply(variability_data[,5:12],c(1,2), function(x) 1/x) # stability is the inverse of variability
+colnames(stability_conversion) <- c("Species_stab","Alpha_stab","Metapopulation_stab","Gamma_stab","Pop_AS","Spatial_AS","Species_AS","Metapopulation_AS")
+stability_beta6_scale6_11sp <- cbind(variability_data[,1:4],stability_conversion,variability_data[,13:18])
+
+#add a column indicating the intended Beta diversity level for my own reference
+stability_beta6_scale6_11sp$Intended_BetaDiv <- as.numeric(rep(A, nrow(stability_beta6_scale6_11sp)))
+
+#add this data to the main dataframe
+stability_betamax_areamax_11sp <- rbind(stability_betamax_areamax_11sp, stability_beta6_scale6_11sp)
+
+```
+
+## F. Beta Diversity = 7 & Area = 7
+
+```{r beta_div7 & Area7, results = FALSE}
+
+### 1. Create combinations of species compositions #############################
+
+A=7 #because we assemble 7 subplots
+
+#make a list of all of pairwise combinations of species compositions within diversity levels
+sim_beta_max<-beta_sim_data_11sp%>% #assigning beta_sim_data_11sp to a new dataframe 
+  filter(year==1, div==c(1,4,8))%>% #subsetting diversity levels 
+  group_by(div) %>% #grouping the data by diversity and year
+  do(as_tibble(t(combn(.$plotID_comp, m = A)))) %>% #creating all the unique combinations of subplots within diversity levels
+  ungroup() %>% 
+  setNames(sub("V", "plotID_comp", colnames(.)))%>% #changing the column names so that they make sense
+  distinct%>% #filters out any rows that are duplicated
+  separate("plotID_comp1", c("Unique_ID1", "comp1"), sep = "_")%>% #separate plot ID's and composition codes to filter out unwanted combinations
+  separate("plotID_comp2", c("Unique_ID2", "comp2"), sep = "_")%>%
+  separate("plotID_comp3", c("Unique_ID3", "comp3"), sep = "_")%>%
+  separate("plotID_comp4", c("Unique_ID4", "comp4"), sep = "_")%>%
+  separate("plotID_comp5", c("Unique_ID5", "comp5"), sep = "_")%>%
+  separate("plotID_comp6", c("Unique_ID6", "comp6"), sep = "_")%>% 
+  separate("plotID_comp7", c("Unique_ID7", "comp7"), sep = "_")%>%
+  filter(comp1 != comp2 & 
+           comp1 != comp3 & 
+           comp1 != comp4 & 
+           comp1 != comp5 & 
+           comp1 != comp6 &
+           comp1 != comp7 &
+           comp2 != comp3 & 
+           comp2 != comp4 & 
+           comp2 != comp5 & 
+           comp2 != comp6 & 
+           comp2 != comp7 &
+           comp3 != comp4 &
+           comp3 != comp5 &
+           comp3 != comp6 & 
+           comp3 != comp7 &
+           comp4 != comp5 &
+           comp4 != comp6 &
+           comp4 != comp7 &
+           comp5 != comp6 &
+           comp5 != comp7 &
+           comp6 != comp7) #filters out (removes) any row where the comp used is used more than once per combination
+  
+## take a sample of size n for each diversity level to reduce sim_beta_max to a size that does not put too much memory pressure on R 
+
+#sampling within diversity levels and plot ID's n times
+data.combos.sampled<-sim_beta_max%>% #assign to a new dataframe
+  group_by(div, Unique_ID1)%>% #group by div and plot ID of column 1
+  sample_n(60, replace = TRUE)  
+
+#add sample ID 
+data.combos.sampled$sampleID <- 1:nrow(data.combos.sampled)
+
+## create a dataframe where I store all sampled species combinations so that I can take the same plots for all years 
+
+#create a dataframe 
+sampled_plotIDs <- as.data.frame(data.combos.sampled[,c('Unique_ID1', 'Unique_ID2', 'Unique_ID3', 'Unique_ID4', 'Unique_ID5', 'Unique_ID6', 'Unique_ID7')])
+
+#add sample ID 
+sampled_plotIDs$sampleID <- 1:nrow(sampled_plotIDs)
+
+### 2. Take the same plots for all years #######################################
+
+# make empty dataframe to store my data
+data_beta_max_area <- data.frame(year=numeric(), block=numeric(), unique_ID=character(), div=numeric(), sown_species_comp=character(), an=numeric(), ar=numeric(), lu=numeric(), or=numeric(), po=numeric(), tr=numeric(), ve=numeric(), fe=numeric(), ru=numeric(), ho=numeric(), kn=numeric(), total.biomass=numeric(), sampleID=numeric())
+
+for (j in 1:5){ # loops across the years
+  for(i in 1:nrow(sampled_plotIDs)){ # loops across our samples
+
+    # create a temporary dataset that contains all data for the plots of sample i for year j
+    temp <- rbind(data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,1],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,2],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,3],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,4],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,5],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,6],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,7],])
+    
+    if(nrow(temp)==A){ # test if data is present since some species combinations are gone in years 2 and 3
+      temp$sampleID <- sampled_plotIDs[i,A+1] #add sampleID
+      # add our new data from this run of the loop to the last data
+      data_beta_max_area <- rbind(data_beta_max_area,temp) # add the new data to the old data 
+    }
+  } 
+}
+
+### 3. Calculate Variability metrics ###########################################
+
+# create new dataframe to store stability metrics per scale
+variability_data <- data.frame(sampleID=numeric(), CompID=character(), div=numeric(), Species_var=numeric(), Alpha_var=numeric(),  Metapopulation_var=numeric(),  
+                                       Gamma_var=numeric(), Pop_synch=numeric(), Spatial_synch=numeric(), Species_synch=numeric(), Metapopulation_synch=numeric(), avg_richness=numeric(), 
+                                       Beta_div=numeric(), B_Invsimpson=numeric(), temp_mean=numeric(), temp_sd=numeric())
+## species_var == species variability or population variability
+## these are all variability metrics --> stability is the inverse of variability
+
+
+#for every landscape (=unique sample id):
+for (i in 1:length(unique(data_beta_max_area$sampleID))){ 
+  
+  datax = data_beta_max_area[data_beta_max_area$sampleID==i,] # selects a subset from data_beta_max_area data --> this subset contains rows only for sample i
+  
+  if(nrow(datax)==(A*5)){ # tests if there is data for all years, because some subplots only have data for one or two years 
+    # create a temporary dataset to store selected information with
+    temp <- datax[1,c("sampleID", "sown_species_comp", "div")]
+    
+    TH.year = 5      ### the number of years to be used 
+    TH.plot = A      ### for the number of communities --> = area size
+    
+    arrayx = array(NA,dim=c(ncol(datax)-7,TH.year,TH.plot)) # -7 to take only the abundance per species data 
+    # datax has 18 columns in total --> 18 - 7 = 11 --> 11 species in BioCliVE (because ca and ra are taken out) 
+    # arrayx creates a multi-dimensional array of NA's
+    ## the number of communities (TH.plot) gives the number of dimensions - when TH.plot = 2 (at scale 2 the number of communities is 2), then there will be 2 matrices
+    ### for each community a matrix is created with 11 rows (1 for each species) and 4 columns (1 for each year)
+    
+    # fill in this array based on datax, by community and by year
+    plotindex = sort(unique(datax$unique_ID))
+    yearindex = sort(unique(datax$year))
+    
+    for(i in 1:TH.plot) #to loop across the matrices (#TH.plot) 
+      for(j in 1:TH.year){ #to loop through the years
+        tmpdata = datax[datax$unique_ID==plotindex[i] & datax$year==yearindex[j],-c(1:5,17:18)] 
+        # -c(1:5,17:18) makes sure that those columns are disregarded as they do not contain biomass data across years for the individual species
+        arrayx[,j,i] = unlist(tmpdata) 
+      }
+    
+    # Now the variance partitioning function can be applied to this array to obtain the desired variability metrics
+    var_part_result = var.partition(arrayx) #var.partition after Wang et al. 2019
+    
+    # extract metrics of interest
+       my_metrics <- var_part_result[c(1:9,11,14:17)]
+    
+    # store these metrics in a temporary dataframe 
+    variability_temp <- t(as.data.frame(my_metrics))
+    
+    # combine the temporary dataframes to resemble the structure of the empty dataframe created above
+    temp <- cbind(temp,variability_temp)
+    
+    # add new data from this loop to the last data
+    variability_data <- rbind(variability_data,temp)
+    
+  }
+}
+
+# add Area and rearrange
+variability_data$Areasize <- as.numeric(rep(A, nrow(variability_data)))
+variability_data <-variability_data[,c(18,1:17)]
+
+# change column names 
+colnames(variability_data) <- c("Area", "sampleID", "CompID", "div", "Species_var", "Alpha_var",  "Metapopulation_var",  "Gamma_var", "Pop_synch", "Spatial_synch", "Species_synch", "Metapopulation_synch", "avg_richness", "Alpha_InvSimpson", "Beta_div", "Beta_InvSimpson", "temp_mean", "temp_sd")
+
+# convert variability to stability
+stability_conversion <- apply(variability_data[,5:12],c(1,2), function(x) 1/x) # stability is the inverse of variability
+colnames(stability_conversion) <- c("Species_stab","Alpha_stab","Metapopulation_stab","Gamma_stab","Pop_AS","Spatial_AS","Species_AS","Metapopulation_AS")
+stability_beta7_scale7_11sp <- cbind(variability_data[,1:4],stability_conversion,variability_data[,13:18])
+
+#add a column indicating the intended Beta diversity level for my own reference
+stability_beta7_scale7_11sp$Intended_BetaDiv <- as.numeric(rep(A, nrow(stability_beta7_scale7_11sp)))
+
+#add this data to the main dataframe
+stability_betamax_areamax_11sp <- rbind(stability_betamax_areamax_11sp, stability_beta7_scale7_11sp)
+
+# save as .RData so that it is easier to re-use and so that I do not have to rerun everything in case R gets overloaded and crashes
+save(stability_betamax_areamax_11sp, file = "../01_data/02_temporary/stability_betamax_areamax_11sp.RData")
+
+```
+
+### Intermezzo 
+
+```{r Intermezzo}
+# clear environment
+rm(list=ls()) 
+```
+
+#### Reload important and needed libraries, data, functions
+
+```{r Setup, results = FALSE} 
+
+# include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
+
+knitr::opts_chunk$set(echo = TRUE)
+# Sets the R markdown options so that the code is displayed in the final html file. If it is set to FALSE then the code isn't displayed only the result is 
+
+rm(list=ls()) #clears my global environment 
+
+# Load libraries
+library(vegan) # calculate diversity metrics - without this package the Wang et al. Function does not work
+library(dplyr) # data manipulation
+library(tidyr) # data manipulation
+library(knitr) # data manipulation
+
+#load data
+load("../01_data/02_temporary/sim_data_11sp.RData")
+load("../01_data/02_temporary/stability_betamax_areamax_11sp.RData")
+
+#load VariancePartitioning Function for the calculation of stability metrics
+source("../02_functions/Wang_et_al_2019_VariancePartitioning.r")
+
+options(stringsAsFactors = F)
+#to make sure that all strings are treated as characters and not factors unless specified
+
+```
+
+```{r create data.list.year to subsample, results = FALSE}
+
+sim_data_11sp$total.biomass<-rowSums(sim_data_11sp[,6:16]) 
+
+year.id<-c(1:5) # create a vector containing all the years
+#div.id<-factor(unique(sort(sim_data_11sp$div))) # create a vector containing all the sown diversity levels once - sorted from smallest to largest --> 1,4,8,12
+data.list.year<-lapply(year.id, function(x) sim_data_11sp[sim_data_11sp$year==x,])
+## lapply(v,function(x) df[df$col==x]) uses a simple function defined in the call --> the function subsets sim_data_11sp by years and stores that data as lists in   year.id with one list for each year --> data.list.year is a list of 4
+
+# create datasets needed for all following steps here
+beta_sim_data_11sp <- unite(sim_data_11sp, col = "plotID_comp", c(3,5), sep = "_") #unite plotID's and composition codes so that I can then extract that information faster and more easily
+
+```
+
+## G. Beta Diversity = 8 & Area = 8
+
+```{r beta_div8 & Area8, results = FALSE}
+
+### 1. Create combinations of species compositions #############################
+
+A=8 #because we assemble 8 subplots
+
+#make a list of all of pairwise combinations of species compositions within diversity levels
+sim_beta_max<-beta_sim_data_11sp%>% #assigning beta_sim_data_11sp to a new dataframe 
+  filter(year==1, div==c(1,4,8))%>% #subsetting diversity levels 
+  group_by(div) %>% #grouping the data by diversity and year
+  do(as_tibble(t(combn(.$plotID_comp, m = A)))) %>% #creating all the unique combinations of subplots within diversity levels
+  ungroup() %>% 
+  setNames(sub("V", "plotID_comp", colnames(.)))%>% #changing the column names so that they make sense
+  distinct() #filters out any rows that are duplicated
+  
+sim_beta_max<-sim_beta_max%>% #I split the pipe into 2 in the hopes that that might speed up the processing time
+  separate("plotID_comp1", c("Unique_ID1", "comp1"), sep = "_")%>% #separate plot ID's and composition codes to filter out unwanted combinations
+  separate("plotID_comp2", c("Unique_ID2", "comp2"), sep = "_")%>%
+  separate("plotID_comp3", c("Unique_ID3", "comp3"), sep = "_")%>%
+  separate("plotID_comp4", c("Unique_ID4", "comp4"), sep = "_")%>%
+  separate("plotID_comp5", c("Unique_ID5", "comp5"), sep = "_")%>%
+  separate("plotID_comp6", c("Unique_ID6", "comp6"), sep = "_")%>% 
+  separate("plotID_comp7", c("Unique_ID7", "comp7"), sep = "_")%>%
+  separate("plotID_comp8", c("Unique_ID8", "comp8"), sep = "_")%>%
+  filter(comp1 != comp2 & 
+           comp1 != comp3 & 
+           comp1 != comp4 & 
+           comp1 != comp5 & 
+           comp1 != comp6 &
+           comp1 != comp7 &
+           comp1 != comp8 &
+           comp2 != comp3 & 
+           comp2 != comp4 & 
+           comp2 != comp5 & 
+           comp2 != comp6 & 
+           comp2 != comp7 &
+           comp2 != comp8 &
+           comp3 != comp4 &
+           comp3 != comp5 &
+           comp3 != comp6 & 
+           comp3 != comp7 &
+           comp3 != comp8 &
+           comp4 != comp5 &
+           comp4 != comp6 &
+           comp4 != comp7 &
+           comp4 != comp8 &
+           comp5 != comp6 &
+           comp5 != comp7 &
+           comp5 != comp8 &
+           comp6 != comp7 &
+           comp6 != comp8 &
+           comp7 != comp8) #filters out (removes) any row where the comp used is used more than once per combination
+
+
+# save as .RData for the case that I need to rerun this part --> the previous step in this chunk takes very long and can sometimes interrupt.
+save(sim_beta_max, file = "../01_data/02_temporary/sim_beta_max_beta8_area8_11sp.RData")
+
+```
+
+```{r}
+load( "../01_data/02_temporary/sim_beta_max_beta8_area8_11sp.RData")
+```
+
+```{r beta_div8 & Area8_2, results = FALSE}
+
+A=8 #we are still working with Area=8
+
+## take a sample of size n for each diversity level to reduce sim_beta_max to a size that does not put too much memory pressure on R 
+
+#sampling within diversity levels and plot ID's n times
+data.combos.sampled<-sim_beta_max%>% #assign to a new dataframe
+  group_by(div, Unique_ID1)%>% #group by div and plot ID of column 1
+  sample_n(60, replace = TRUE) # n needs to be this high to get just slightly over 60 samples in div=1
+
+#add sample ID 
+data.combos.sampled$sampleID <- 1:nrow(data.combos.sampled)
+
+## create a dataframe where I store all sampled species combinations so that I can take the same plots for all years 
+
+#create a dataframe 
+sampled_plotIDs <- as.data.frame(data.combos.sampled[,c('Unique_ID1', 'Unique_ID2', 'Unique_ID3', 'Unique_ID4', 'Unique_ID5', 'Unique_ID6', 'Unique_ID7', 'Unique_ID8')])
+
+#add sample ID 
+sampled_plotIDs$sampleID <- 1:nrow(sampled_plotIDs)
+
+### 2. Take the same plots for all years #######################################
+
+# make empty dataframe to store my data
+data_beta_max_area <- data.frame(year=numeric(), block=numeric(), unique_ID=character(), div=numeric(), sown_species_comp=character(), an=numeric(), ar=numeric(), lu=numeric(), or=numeric(), po=numeric(), tr=numeric(), ve=numeric(), fe=numeric(), ru=numeric(), ho=numeric(), kn=numeric(), total.biomass=numeric(), sampleID=numeric())
+
+for (j in 1:5){ # loops across the years
+  for(i in 1:nrow(sampled_plotIDs)){ # loops across our samples
+
+    # create a temporary dataset that contains all data for the plots of sample i for year j
+    temp <- rbind(data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,1],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,2],], 
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,3],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,4],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,5],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,6],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,7],],
+                  data.list.year[[j]][data.list.year[[j]]$unique_ID==sampled_plotIDs[i,8],])
+    
+    if(nrow(temp)==A){ # test if data is present since some species combinations are gone in years 2 and 3
+      temp$sampleID <- sampled_plotIDs[i,A+1] #add sampleID
+      # add our new data from this run of the loop to the last data
+      data_beta_max_area <- rbind(data_beta_max_area,temp) # add the new data to the old data 
+    }
+  } 
+}
+
+### 3. Calculate Variability metrics ###########################################
+
+# create new dataframe to store stability metrics per scale
+variability_data <- data.frame(sampleID=numeric(), CompID=character(), div=numeric(), Species_var=numeric(), Alpha_var=numeric(),  Metapopulation_var=numeric(),  
+                                       Gamma_var=numeric(), Pop_synch=numeric(), Spatial_synch=numeric(), Species_synch=numeric(), Metapopulation_synch=numeric(), avg_richness=numeric(), 
+                                       Beta_div=numeric(), B_Invsimpson=numeric(), temp_mean=numeric(), temp_sd=numeric())
+## species_var == species variability or population variability
+## these are all variability metrics --> stability is the inverse of variability
+
+
+#for every landscape (=unique sample id):
+for (i in 1:length(unique(data_beta_max_area$sampleID))){ 
+  
+  datax = data_beta_max_area[data_beta_max_area$sampleID==i,] # selects a subset from data_beta_max_area data --> this subset contains rows only for sample i
+  
+  if(nrow(datax)==(A*5)){ # tests if there is data for all years, because some subplots only have data for one or two years 
+    # create a temporary dataset to store selected information with
+    temp <- datax[1,c("sampleID", "sown_species_comp", "div")]
+    
+    TH.year = 5      ### the number of years to be used 
+    TH.plot = A      ### for the number of communities --> = area size
+    
+    arrayx = array(NA,dim=c(ncol(datax)-7,TH.year,TH.plot)) # -7 to take only the abundance per species data 
+    # datax has 18 columns in total --> 18 - 7 = 11 --> 11 species in BioCliVE (because ca and ra are taken out) 
+    # arrayx creates a multi-dimensional array of NA's
+    ## the number of communities (TH.plot) gives the number of dimensions - when TH.plot = 2 (at scale 2 the number of communities is 2), then there will be 2 matrices
+    ### for each community a matrix is created with 11 rows (1 for each species) and 4 columns (1 for each year)
+    
+    # fill in this array based on datax, by community and by year
+    plotindex = sort(unique(datax$unique_ID))
+    yearindex = sort(unique(datax$year))
+    
+    for(i in 1:TH.plot) #to loop across the matrices (#TH.plot) 
+      for(j in 1:TH.year){ #to loop through the years
+        tmpdata = datax[datax$unique_ID==plotindex[i] & datax$year==yearindex[j],-c(1:5,17:18)] 
+        # -c(1:5,17:18) makes sure that those columns are disregarded as they do not contain biomass data across years for the individual species
+        arrayx[,j,i] = unlist(tmpdata) 
+      }
+    
+    # Now the variance partitioning function can be applied to this array to obtain the desired variability metrics
+    var_part_result = var.partition(arrayx) #var.partition after Wang et al. 2019
+    
+    # extract metrics of interest
+       my_metrics <- var_part_result[c(1:9,11,14:17)]
+    
+    # store these metrics in a temporary dataframe 
+    variability_temp <- t(as.data.frame(my_metrics))
+    
+    # combine the temporary dataframes to resemble the structure of the empty dataframe created above
+    temp <- cbind(temp,variability_temp)
+    
+    # add new data from this loop to the last data
+    variability_data <- rbind(variability_data,temp)
+    
+  }
+}
+
+# add Area and rearrange
+variability_data$Areasize <- as.numeric(rep(A, nrow(variability_data)))
+variability_data <-variability_data[,c(18,1:17)]
+
+# change column names 
+colnames(variability_data) <- c("Area", "sampleID", "CompID", "div", "Species_var", "Alpha_var",  "Metapopulation_var",  "Gamma_var", "Pop_synch", "Spatial_synch", "Species_synch", "Metapopulation_synch", "avg_richness", "Alpha_InvSimpson", "Beta_div", "Beta_InvSimpson", "temp_mean", "temp_sd")
+
+# convert variability to stability
+stability_conversion <- apply(variability_data[,5:12],c(1,2), function(x) 1/x) # stability is the inverse of variability
+colnames(stability_conversion) <- c("Species_stab","Alpha_stab","Metapopulation_stab","Gamma_stab","Pop_AS","Spatial_AS","Species_AS","Metapopulation_AS")
+stability_beta8_scale8_11sp <- cbind(variability_data[,1:4],stability_conversion,variability_data[,13:18])
+
+#add a column indicating the intended Beta diversity level for my own reference
+stability_beta8_scale8_11sp$Intended_BetaDiv <- as.numeric(rep(A, nrow(stability_beta8_scale8_11sp)))
+
+#add this data to the main dataframe
+stability_betamax_areamax_11sp <- rbind(stability_betamax_areamax_11sp, stability_beta8_scale8_11sp)
+
+# save as .RData just in case
+save(stability_betamax_areamax_11sp, file = "../01_data/02_temporary/beta_max_area_max_11sp.RData")
+
+```
+
+# Subsample and Save 
+
+```{r save dataset3, results = FALSE}
+
+load("../01_data/02_temporary/beta_max_area_max_11sp.RData")
+
+#sample data again to achieve same sample sizes across diversity levels and area (n = 60)
+stability_betamax_areamax__60samplesperdiv_11sp <- stability_betamax_areamax_11sp%>% 
+  group_by(Area,div)%>% 
+  sample_n(60, replace = FALSE)%>%
+  ungroup()
+
+# save as .RData so that it is easier to re-use
+save(stability_betamax_areamax__60samplesperdiv_11sp, file = "../01_data/02_temporary/stability_betamax_areamax__60samplesperdiv_11sp.RData")
+
+```
+

@@ -1,0 +1,194 @@
+---
+title: "Plot Gamma Stability"
+output: html_document
+---
+
+Running this document produces Figure 3 of the main text.
+
+```{r General Settings, include=FALSE}
+# include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
+
+# General Settings
+knitr::opts_chunk$set(echo = TRUE)
+# Sets the R markdown options so that the code is displayed in the final html file. If it is set to FALSE then the code isn't displayed only the result is 
+
+rm(list=ls()) #clear global environment
+
+options(stringsAsFactors = F)
+#to make sure that all strings are treated as characters and not factors unless specified
+
+```
+
+```{r Load Libraries and Data, include=FALSE}
+
+# load libraries
+library(tidyverse)  # tidy data for data manipulation and visualization
+library(tidybayes)  # tidy data for Bayesian models
+library(knitr)      # data manipulation
+library(cowplot)    # for nice plot layout
+library(brms)       # fitting Bayesian models
+library(bayesplot)  # visualization of Bayesian models
+library(rstan)      # bayesian models
+library(cmdstanr)   # using the more-up-to-date cmdstanr instead of rstan as the underlying MCMC engine to avoid ***recursive gc invocation warnings
+library(bayestestR) # helpful for some initial plotting 
+library(see)        # the plots in the above package don't work without this 
+library(loo)        # to do leave one out checks
+library(MetBrewer)  # pretty colors
+
+# load custom functions
+source("../02_functions/CustomFunctions.R")
+                  
+#load data
+load("../01_data/03_derived/scaling_data.RData")
+
+```
+
+```{r remove outliers and normalize data}
+filtered_data <- remove_outliers(data=scaling_data, vars=c("Spatial_AS","Gamma_stab"), quantile_cutoff = 0.997)
+filtered_data <- normalize_min_max(data=filtered_data, var="Spatial_AS", epsilon = 0.0001, new_var_name = "Spatial_AS_normalized_exclusive_1")
+```
+
+```{r reduce dataframe}
+#select only necessary columns to reduce memory usage
+filtered_data <- filtered_data %>%
+  select(Spatial_AS, Gamma_stab, Area, div) 
+```
+
+```{r read in the model}
+GS_quantile <- readRDS("./models/GS_quantile.rds")
+```
+
+# Fig. 3
+
+## A. Alpha Diversity Facets
+
+```{r Fig. 3A}
+
+# define colour palette
+hokusai.palette <- met.brewer("Hokusai1", 7)
+
+theme_set(theme_tidybayes() + panel_border())
+GS_prediction_curves <- filtered_data %>% 
+  add_epred_draws(GS_quantile, ndraws = 5000) %>%  #specify number of draws only during initial stages of plotting
+  ggplot(aes(x = Spatial_AS, y = Gamma_stab, group = Area, color = Area)) + # group by Area to avoid messy lines
+  # Add the ribbons with a gray fill for uncertainty
+  stat_lineribbon(aes(y = .epred), .width = 0.95, fill = 'gray') +  # define '.width' for custom credible interval; fill = "gray"
+  # Faceting
+  facet_grid(.~div) +
+  # Axis labels
+  xlab("Spatial Asynchrony") +
+  ylab("Gamma Stability") +
+  # Color scale for 'Area'
+  scale_color_gradientn(name = "Area", colors = hokusai.palette) +
+  # Modify axes's appearance
+  xlim(0.9,2.6)+
+  theme(axis.title = element_text(size = 20, colour = "black"), 
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black"),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.text  = element_text(size = 15,colour="black"),
+        legend.title = element_text(size = 20,colour="black"),
+        legend.key.height = unit(0.5, "null"),
+        strip.text = element_text(size = 20),
+        axis.ticks = element_line(colour="black"),
+        panel.border = element_rect(colour="black", fill=NA))
+
+# Print the plot
+print(GS_prediction_curves)
+
+# Save the plot using ggsave()
+ggsave("./figures/Fig.3A.png", plot = GS_prediction_curves, width = 8, height = 6, dpi = 600)
+
+```
+
+## B. Zoomed in - area facets with different linetypes
+
+```{r Fig. 3B}
+
+# define colour palette
+hokusai.palette <- met.brewer("Hokusai1", 7)
+
+theme_set(theme_tidybayes() + panel_border())
+GS_prediction_curves_beta2_area.facet <- filtered_data %>% 
+  add_epred_draws(GS_quantile, ndraws = 5000) %>% # specify number of draws only during initial stages of plotting
+  mutate(div.factor = factor(div, levels = c(1, 4, 8))) %>% # group by div, and reorder levels for legend
+  ggplot(aes(x = Spatial_AS, 
+             y = Gamma_stab, 
+             group = div.factor, 
+             linetype = div.factor)) + # ensures that linetype is mapped to div.factor
+  # Add the ribbons with a gray fill for uncertainty
+  stat_lineribbon(aes(y = .epred, linetype = div.factor), #ensures that linetype is mapped to div.factor
+                  .width = 0.95, # width of the credible interval
+                  fill = 'gray', # color of the ribbon
+                  color = 'black') + # ensures the lines are shown in the legend 
+  # Faceting
+  facet_grid(.~Area) +
+  # Axis labels
+  xlab("Spatial Asynchrony") +
+  ylab("Gamma Stability") +
+  # Manual linetype scale and black line color
+  scale_linetype_manual(name = "Planted\nRichness", values = c("solid", "dashed", "dotted")) + # legend specifications
+  # Chop plot to zoom in where we want to focus
+  coord_cartesian(xlim = c(1, 1.4),
+                  ylim = c(1,3.5)) + 
+  # Mofify axes's appearance
+  scale_x_continuous(breaks = c(1,1.2,1.4))+ # reduce number of x axis ticks
+  theme(axis.title = element_text(size = 20, colour = "black"), 
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black", angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.text  = element_text(size = 15,colour="black"),
+        legend.title = element_text(size = 20,colour="black"),
+        legend.key.width = unit(1.5, "cm"),  # Increase legend key width to show linetypes clearly
+        strip.text = element_text(size = 20),
+        axis.ticks = element_line(colour="black"),
+        panel.border = element_rect(colour="black", fill=NA),
+        panel.spacing = unit(1, "lines"))
+  
+# Print the plot
+print(GS_prediction_curves_beta2_area.facet)
+
+# Save the plot using ggsave()
+ggsave("./figures/Fig.3B.png", plot = GS_prediction_curves_beta2_area.facet, width = 8, height = 6, dpi = 600)
+
+```
+
+# Addressing some feedback
+
+Shaopeng thinks a plot with spatial extent on the x-axis, and spatial asynchrony or gamma stability on the y-axis with alpha diversity as a co-variate is more intuitive.
+
+```{r}
+
+theme_set(theme_tidybayes() + panel_border())
+filtered_data %>% 
+  add_epred_draws(GS_quantile, ndraws = 5000) %>%  # Add predicted draws from model
+  mutate(div.factor = factor(div, levels = c(1, 4, 8))) %>%  # Convert div to a factor with ordered levels
+  ggplot(aes(x = Area, 
+             y = Gamma_stab, 
+             group = div.factor, 
+             linetype = div.factor)) +  # Map linetype and grouping to div.factor
+  # Add the ribbons with a gray fill for uncertainty
+  stat_lineribbon(aes(y = .epred, linetype = div.factor),  # Use predicted values with linetype mapping
+                  .width = 0.95,  # Width of the 95% credible interval
+                  fill = 'gray',  # Fill color for ribbon
+                  color = 'black') +  # Line color
+  # Axis labels
+  xlab("Spatial Extent") +
+  ylab("Gamma Stability") +
+  # Manual linetype scale and black line color
+  scale_linetype_manual(name = "Planted\nRichness", values = c("solid", "dashed", "dotted")) +  # Legend settings
+  # Modify axes's appearance
+  theme(axis.title = element_text(size = 20, colour = "black"), 
+        axis.line.x = element_line(colour = "black"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.x = element_text(size = 15,colour="black"),
+        axis.text.y = element_text(size = 15,colour="black"),
+        legend.text  = element_text(size = 15,colour="black"),
+        legend.title = element_text(size = 20,colour="black"),
+        legend.key.width = unit(1.5, "cm"),  # Increase legend key width to show linetypes clearly
+        strip.text = element_text(size = 20),
+        axis.ticks = element_line(colour="black"),
+        panel.border = element_rect(colour="black", fill=NA))
+```

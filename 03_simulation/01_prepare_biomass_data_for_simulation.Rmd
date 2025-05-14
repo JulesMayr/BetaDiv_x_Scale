@@ -1,0 +1,258 @@
+---
+title: "Prepare data for simulation"
+output: html_document
+---
+
+In order to facilitate running the simulations, a few extra details are necessary to add to the cleaned data. This includes the addition of a sown species composition code which will aid in the aggregation of sub-plots. To keep track of the different sub-plots being used for aggregations, a unique identifier will also be needed. 
+
+Finally, please note how the dataset is reduced to only include 11 species and not 12 - as originally designed. This was done due to a species change from *Cardemine pratensis* to *Ranunculus repens* in 2020 as *C. pratensis* failed to successfully establish in the BioCliVE. These species were excluded from our analyses
+
+```{r Setup, include=FALSE} 
+
+# include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
+
+knitr::opts_chunk$set(echo = TRUE)
+# Sets the R markdown options so that the code is displayed in the final html file. If it is set to FALSE then the code isn't displayed only the result is 
+
+rm(list=ls()) #clears global environment 
+
+# Load libraries
+library(dplyr) # data manipulation
+library(tidyr) # data manipulation
+library(knitr) # data manipulation
+
+options(stringsAsFactors = F)
+#to make sure that all strings are treated as characters and not factors unless specified
+
+
+```
+
+# Manipulate cleaned data to prepare dataset for simulations
+
+## 1. Create a presence-absence matrix to represent the design of the BioCliVE
+
+To create species composition codes at the plot/sub-plot levels (for sown species composition).
+
+```{r Load Data, include=FALSE}
+
+# data1
+species_code <- read.table('../01_data/01_raw/species_code.txt', stringsAsFactors = F, header = T)
+
+# data2
+species_name <- read.table('../01_data/01_raw/species_name.txt', stringsAsFactors = F)
+
+```
+
+```{r Replace species code in data1 with correct species from data2, include=FALSE}
+
+# create a for-loop to substitute each entry in species codes with the right species
+for (i in 1:length(species_code$species_code)) { 
+  # to loop through the entire column "species code"
+  for (j in 1: length(species_name$species)) {   
+    # to loop through the entire column "species"
+    if (species_code$species_code[i] == rownames(species_name)[j]){ 
+      # if i in species_code is equal to the rownames of j, then
+      species_code$species_code[i] <- species_name$species[j]       
+      # i in species_code is replaced by the species in 'species' in j
+    }
+  }
+}
+
+# print first few rows of dataframe to see if it worked
+head(species_code)              
+
+
+# rename 
+my.df <- species_code #rename dataframe
+colnames(my.df)[2] <- "species" #rename column
+
+```
+
+```{r Create Matrix, include=FALSE}
+
+# add presence column 
+### needs to be added here in order to reshape the dataframe
+my.df$present <- rep(1, nrow(my.df))
+
+# I call it a presence-absence matrix, but it actually is a dataframe as it contains different types of data
+
+# Long- to wide-format data
+p.a_matrix <- reshape(my.df, idvar = 'plot', timevar = 'species', direction = 'wide')
+
+# replace NA's with 0
+p.a_matrix[is.na(p.a_matrix)] <- 0
+
+```
+
+```{r strip prefixes, include=FALSE}
+
+# strip prefixes so that column names of species are the same as in the cleaned data (sp_AGBiomass_2018-2022.csv)
+
+### write function to be reused 
+colnames_prefix_remove <- function (df, prefix) {
+  names <- colnames(df) # assign the colnames to a vector
+  indices <- (substr(names,1,nchar(prefix))== prefix) # substr(x,start,stop) extracts the prefix as a substring from the colname
+                                                      # 'indeces' is a vector of logicals - those colnames that contain the prefix = T
+  names[indices] <- substr(names[indices], nchar(prefix)+1, nchar(names[indices]))
+  return(names)
+}
+
+#use function to strip prefixes
+new_colnames <- colnames_prefix_remove(p.a_matrix, "present.")
+colnames(p.a_matrix) <- new_colnames
+
+#rename to define clearly that it is at plot level
+p.a_matrix_plot <- p.a_matrix
+
+```
+
+```{r add sub-plot level, include=FALSE}
+
+# for each plot, quadruple the lines to add in subplots (a,b,c,d) as well  
+# subplots always have the same SOWN species composition ("div") as the plot
+
+#replicate every row 4 times
+p.a_matrix_subplot <- p.a_matrix_plot[rep(1:nrow(p.a_matrix_plot), 4),] 
+  
+#sort rows by plot number
+p.a_matrix_subplot <- p.a_matrix_subplot[order(p.a_matrix_subplot$plot),] 
+
+#add subplot identifier and rearrange columns so that subplot comes after plot
+p.a_matrix_subplot$subplot <- c('a','b','c','d')
+p.a_matrix_subplot <- p.a_matrix_subplot[,c(1,14,2:13)] 
+rownames(p.a_matrix_subplot) <- c() #get rid of rownames
+
+```
+
+```{r extract species composition code, include=FALSE}
+
+# for each plot and subplot create a species composition code
+# do this by using presence-absence matrix and then merge with data
+
+species_composition <- rep(NA,nrow(p.a_matrix_subplot)) # create a vector to store species composition code in for each row (each row represents a community)
+p.a_matrix_subplot$plot <- as.factor(p.a_matrix_subplot$plot) # convert plot numbers to factors so that only species abbreviations will be extracted
+
+for (i in 1:nrow(p.a_matrix_subplot)){  # iterate over rows in p.a_matrix_subplot
+  x <- rep(NA, ncol(p.a_matrix_subplot)) # create a vector to store present species abbreviations in 
+  for (j in 1:ncol(p.a_matrix_subplot)){ # iterate over each column
+    if (p.a_matrix_subplot[i,j] == 0|!is.numeric(p.a_matrix_subplot[i,j])){ # if info in cell at the ith row and jth column is 0 or not not numeric, then
+      x[j] <- NA # store "NA" in x
+    } else if(p.a_matrix_subplot[i,j] == 1){ # else, if the cell at position [i,j] is equal to 1, then
+      x[j] <- colnames(p.a_matrix_subplot[j]) # store column name, i.e. species abbreviation in x
+    }
+    x <-x[!is.na(x)] #remove NA's in x
+    y <- paste(x, sep = "", collapse = "") #concatenate strings in x and assign to variable y
+  }
+  species_composition[i] <- y #for each y of the ith row, append y to the vector species_composition 
+}
+
+# check if it was executed correctly: [12 x 1 species + 12 x 4 species + 12 x 8 species + 1 x 12 species] x 2 blocks = 37 unique elements
+length(unique(species_composition))
+
+# convert plot numbers back to numeric
+p.a_matrix_subplot$plot <- as.numeric(p.a_matrix_subplot$plot)  
+
+# add these species composition codes to dataframe 'p.a_matrix_subplot'
+p.a_matrix_subplot$sown_species_comp <- species_composition
+
+# subset p.a_matrix_subplot so that only plot, subplot and species_comp are selected
+species_comp_df <- p.a_matrix_subplot[,c(1,2,15)] 
+
+```
+
+## 2. Prepare Simulation Dataset
+
+### 1. Prepare biomass data
+
+```{r subset cleaned data, include=FALSE}
+
+# load data
+AGbiomass <- read.csv("../01_data/01_raw/sp_AGBiomass_2018-2022.csv", stringsAsFactors = F, header = T)
+
+#instead of year, create column for year of data collection --> i.e. 1,2,3,4,5 instead of 2018,2019,2020,2021,2022
+#this will make simulations easier to follow
+AGbiomass$year = factor(AGbiomass$year)
+levels(AGbiomass$year) = c(1,2,3,4,5)
+AGbiomass$year = as.numeric(as.character(AGbiomass$year))
+
+#long- to wide-format use values_fn=mean to take the mean --> this is important because in 2021 subplot 23a was doubled
+AGbiomass_wide<-pivot_wider(AGbiomass[,c(1:3,5:7,9)], names_from=c("species"), values_from=c("ag_biomass"), values_fn=mean)
+  #remember div = sown species diversity!
+
+# replace NA with 0
+AGbiomass_wide[is.na(AGbiomass_wide)] <- 0
+
+#rearrange columns
+AGbiomass_wide <- AGbiomass_wide[,c(3,4,1,2,5:18)]
+
+# give shorter name to df
+AGB_data <- AGbiomass_wide 
+
+```
+
+```{r Merge data to create full dataset with species composition codes for each subplot}
+
+# merge full data sets 
+full_data <- merge(AGB_data,species_comp_df, by = c('plot', 'subplot'))
+
+# reorganize dataframe columns more logically 
+full_data <- full_data[, c(3,4,1,2,5,19,6,7:18)]
+
+
+# take out all information on ca and ra --> rows and columns
+full_data <- subset(full_data, select = -c(9,19)) #take out both columns of ca and ra
+full_data <- full_data[full_data$sown_species_comp!="ca",] #take out ca/ra monocultures 
+
+```
+
+## 3. Create random pairs of 12 species mixtures (one from each block) - so that plots will be sampled equally across all monocultures and mixtures. 
+
+
+```{r create random pairs of plots of 12 species mixtures across blocks}
+
+# extract data for all 12 species mixtures from full_data
+mixture_12 <- subset(full_data, full_data$div == 12)
+
+# extract plot numbers
+mixture_plots <- sort(unique(mixture_12$plot))
+block1 <- mixture_plots[mixture_plots <= 44] # block 1 contains plots 1 - 44
+block2 <- mixture_plots[mixture_plots >= 44] # block 2 contains plots 45 - 88
+
+# create random combinations and add identifier to species composition code
+sp_composition <- rep(mixture_12$sown_species_comp[1],8) # a vector containing the species composition code --> is repeated 8 times as code is the same for                                                                 all 12 species mixtures
+set.seed(123) #set.seed to always get the same sample
+block2 <- sample(block2,8, replace = F) # creates a random sample of the plots in block 2
+identifier <- letters[1:8] # will be used to create a unique identifier for plot pairs
+sown_species_comp <- paste(sp_composition,identifier, sep = "_")
+mixture_12_combination <- cbind(sown_species_comp,block1,block2)
+block1 <- mixture_12_combination[,c(1,2)]
+block2 <- mixture_12_combination[,c(1,3)]
+colnames(block1)[2] <- "plot"
+colnames(block2)[2] <- "plot"
+mixture_12_combination <- as.data.frame(rbind(block1,block2))
+
+# replace in full_data 
+for (i in 1:length(mixture_12_combination$plot)){
+  for (j in 1:length(full_data$plot)){
+    if (mixture_12_combination$plot[i] == full_data$plot[j]){
+      full_data$sown_species_comp[j] <- mixture_12_combination$sown_species_comp[i]
+    }
+  }
+}
+
+# check if it was executed correctly: every species composition should now only be replicated once --> 2 blocks of 44 plots (-ca monocultures)--> 43 unique elements
+length(unique(full_data$sown_species_comp))
+
+```
+
+## 4. Create unique IDs for each subplot
+
+```{r Unique IDs}
+
+# unite plot-subplot columns to create unique id's --> this data will be needed to run the simulations
+sim_data_11sp <- unite(full_data, col = "unique_ID", 3:4, sep = "")
+
+#save as .RData so that it is easier to re-use
+save(sim_data_11sp,file = "../01_data/02_temporary/sim_data_11sp.RData")
+
+```

@@ -1,0 +1,13 @@
+species_code	species_name	species	fg
+G1	Arrhenaterum elatius	ar	g
+G2	Holcus lanatus	ho	g
+G3	Luzula campestris	lu	g
+G4	Anthoxanthum odoratum	an	g
+G5	Poa trivialis	po	g
+G6	Festuca rubra	fe	g
+F1	Tragopogon pratensis	tr	f
+F2	Rumex acetosa	ru	f
+F3	Veronica chamaedrys	ve	f
+F4	Cardamine pratensis	ca	f
+F5	Origanum vulgare	or	f
+F6	Knautia arvensis 	kn	f
