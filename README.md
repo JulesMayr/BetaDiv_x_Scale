@@ -16,7 +16,7 @@ You can either download the project files directly from GitHub or clone the repo
 - **To download**: [Click here to download the ZIP file](<INSERT LINK TO ZIP>)
 - **To clone**: use `git clone <https://github.com/JulesMayr/BetaDiv_x_Scale.git>`
 
-To open the project, click on the BetaDivXScale_Code.Rproj file. This will open the project in RStudio and automatically set the working directory to the correct location, with relative paths properly configured.
+To open the project, double click on the BetaDivXScale_Code.Rproj file. This will open the project in RStudio and automatically set the working directory to the correct location, with relative paths properly configured.
 
 ### 2. Install Required Packages
 
@@ -35,7 +35,7 @@ This will install all the necessary packages from the renv.lock file and set up 
 
 ### 3. Install CmdStaR 
 
-This project uses the cmdstanr package for Bayesian modeling via Stan. To install cmdstanr and CmdStan itself, you can follow the instructions available at the official website: <https://mc-stan.org/cmdstanr/articles/cmdstanr.html>
+This project uses the cmdstanr package for Bayesian modeling via Stan. To install cmdstanr and CmdStan itself, you can follow the instructions available at the official website: <https://mc-stan.org/cmdstanr/articles/cmdstanr.html>.
 If you do not have a windows computer, the following commands are often enough:
 
 ``` {r}
