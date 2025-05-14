@@ -93,7 +93,7 @@ Variable Information for the data set `sp_AGBiomass_2018_2022.csv`:
 | `plot`         | The plot number where the biomass was collected, an integer from 1 to 88 | Study variable         | NA                    | 
 | `subplot`      | The subplot where the biomass was collected. There are four subplots per plot, values A, B, C, or D | Study variable         | NA                    |
 | `block`        | The block where the plot is located; BioCliVE has two blocks (1 and 2), each with 44 plots | Study variable         | NA                    |
-| `year`         | Year in which the data were collected (2018–2021) | Study variable         | NA                    | 
+| `year`         | Year in which the data were collected (2018–2022) | Study variable         | NA                    | 
 | `date`         | Exact date that biomass was clipped        | NA                    | DD.MM.YYYY             | 
 | `div`          | Sown species richness                      | Study variable         | NA                    |
 | `species`      | Species code                               | Study variable         | NA                    | 
