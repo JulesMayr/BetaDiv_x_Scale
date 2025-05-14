@@ -2,6 +2,8 @@
 
 Dear reader,
 
+This R project accompanies the analysis for the manuscript titled "SCALE-DEPENDENT IMPACTS OF BETA DIVERSITY ON TEMPORAL STABILITY VIA SPATIAL ASYNCHRONY", providing all code, models, and data used in the study.
+
 [...short description...]
 
 
