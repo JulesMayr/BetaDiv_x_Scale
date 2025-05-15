@@ -84,22 +84,7 @@ The data folder stores all project data.
 
 This sub-folder contains the two files `species_name.txt` and `species_code.txt` which, together, represent the design of the UU BioCliVE and contain information on the species used in general as well as for each plot. Furthermore, it contains the file `sp_AGBiomass_2018_2022.csv`, which is the cleaned data associated with the BioCliVE platform. 
 
-`sp_AGBiomass_2018_2022.csv`has been collected in the BioCliVE on above-ground biomass for each species since 2018. 
-Data was collected every year by students and volunteers in the summer months (June-September), when the plots were estimated to have reached peak standing biomass. 
-
-Variable Information for the data set `sp_AGBiomass_2018_2022.csv`:
-| Variable Name  | Description | Method of Collection | Units of Measurement | 
-|----------------|-------------|----------------------|----------------------|
-| `plot`         | The plot number where the biomass was collected, an integer from 1 to 88 | Study variable         | NA                    | 
-| `subplot`      | The subplot where the biomass was collected. There are four subplots per plot, values A, B, C, or D | Study variable         | NA                    |
-| `block`        | The block where the plot is located; BioCliVE has two blocks (1 and 2), each with 44 plots | Study variable         | NA                    |
-| `year`         | Year in which the data were collected (2018–2022) | Study variable         | NA                    | 
-| `date`         | Exact date that biomass was clipped        | NA                    | DD.MM.YYYY             | 
-| `div`          | Sown species richness                      | Study variable         | NA                    |
-| `species`      | Species code                               | Study variable         | NA                    | 
-| `species name` | Scientific species name                    | Study variable         | NA                    | 
-| `Ag_biomass`   | Dried above-ground biomass per species     | Clipping middle 50×50 m plot (25×50 in 2021), sorting to species, oven drying at 70°C for 48h | Grams per m² (g/m²) | NA |
-
+A detailed description of `sp_AGBiomass_2018_2022.csv` can be found in the README document in the 01_data folder. 
 
 ##### 02_temporary
 
@@ -109,21 +94,7 @@ This sub-folder contains most project-generated data, which is generated in a st
 
 This sub-folder contains the final data set used for the statistical analysis, which we call `scaling_data`. It was stored in a separate sub-folder to clearly separate it from any other data that was generated.
 
-Variable Information for data set `scaling_data`:
-| Variable Name     | Description | Method of Collection | Calculation |
-|-------------------|-------------|----------------------|-------------|
-| `Area`            | The spatial extent of the simulated landscape | Simulation | A numeric integer between 1 and 8, representing the sum of aggregated subplots |
-| `div`             | Sown species richness | Study variable | NA |
-| `Intended_BetaDiv`| Conceptual measure of Beta Diversity | Simulation | Number of different species compositions used for a given landscape |
-| `Alpha_stab`      | Average temporal stability at the subplot/community level of a given landscape | Simulation | (Sum of all community SDs in the landscape) / (Overall temporal mean) |
-| `Gamma_stab`      | Temporal stability at the landscape scale | Simulation | Overall σ / μ per simulated landscape | 
-| `Spatial_AS`      | Spatial asynchrony | Simulation | Gamma_stab / Alpha_stab |
-| `avg_richness`    | Realized average alpha diversity | Simulation | Mean number of species at the community level |
-| `Beta_div`        | Realized richness-based Beta Diversity of a given landscape. May differ from intended beta diversity because plots may share species even if sown compositions differ | Simulation | mean(Gamma_div / avg_richness) | 
-| `Gamma_div`       | Realized species richness at the landscape scale | Computed within `var.partition` (not output directly) | avg_richness × Beta_div |
-
-**There are more!!!** [...]
-
+A detailed description of `scaling_data` can also be found in the README document in the 01_data folder. 
 
 #### 02_functions
 
