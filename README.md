@@ -124,3 +124,6 @@ This folder contains the analysis scripts and documentation for the Bayesian ana
 #### 05_Supplementary_Information
 
 This folder contains two .Rmd files. These files were knitted to produce the .html files that represent the supplementary material associated with the main text.
+
+## License
+
