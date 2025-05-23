@@ -35,10 +35,10 @@ GENERAL INFORMATION
 
 ---------------------------------------------------------------------------
 DATA-SPECIFIC INFORMATION FOR: sp_AGBiomass_2018_2022.csv
-------------------------------------------------------------
+---------------------------------------------------------------------------
 
 1. Number of variables: 9  
-2. Number of rows: [9912]  
+2. Number of rows: 9912 
 
 3. Description:  
    Above-ground biomass data collected annually during the summer months (June–September) in the BioCliVE experiment. Sampling occurred during peak standing biomass and involved clipping, sorting by species, and drying.
@@ -46,7 +46,7 @@ DATA-SPECIFIC INFORMATION FOR: sp_AGBiomass_2018_2022.csv
 4. Variable List
 
    A. Name: plot  
-      Description: The plot number (1 to 88) where biomass was collected  
+      Description: Plot number where biomass was collected (1 to 88)  
       Type: integer  
 
    B. Name: subplot  
@@ -63,7 +63,7 @@ DATA-SPECIFIC INFORMATION FOR: sp_AGBiomass_2018_2022.csv
 
    E. Name: date  
       Description: Exact clipping date  
-      Type: character (DD.MM.YYYY)  
+      Type: character (format: DD.MM.YYYY)  
 
    F. Name: div  
       Description: Planted species richness  
@@ -81,22 +81,23 @@ DATA-SPECIFIC INFORMATION FOR: sp_AGBiomass_2018_2022.csv
       Description: Dried above-ground biomass per species  
       Type: numeric  
       Units: grams per square meter (g/m²)  
-      Method: Clipping middle 50×50 cm subplot (25×50 in 2021 and 2022), sorting to species, oven-drying at 70°C for 48 hours
+      Method: Clipping middle 50×50 cm subplot (25×50 cm in 2021 and 2022), sorting by species, oven-drying at 70°C for 48 hours
 
-------------------------------------------------------------
-DATA-SPECIFIC INFORMATION FOR: scaling_data.csv
-------------------------------------------------
+--------------------------------------------------------------
+DATA-SPECIFIC INFORMATION FOR: scaling_data.RData
+--------------------------------------------------
 
 **Important Note:**  
 Because this dataset is based on simulated data, the exact values may vary slightly from those presented in the manuscript. These differences are due to variation in simulation outputs across runs.
+Note also that the number of rows in the final analysis is reduced due to the removal of outliers.
 
 1. Number of variables: 16 (the 7 variables relevant for the analysis are described below)  
-2. Number of rows: [12694]
+2. Number of rows: 12694
 
 3. Description:  
-   Simulation-based dataset generated to explore how biodiversity–stability relationships scale from the subplot to the landscape level. Landscapes are constructed by aggregating subplots with varying richness and species compositions (beta diversity).
-   
-       *Note: The full dataset contains additional variables not described here. This section documents mainly the variables used in the analyses reported in the main text—as well as certain variables that played a key role during the simulation procedure or were used to calculate the variables of interest.*
+   Simulation-based dataset generated to explore how biodiversity–stability relationships scale across spatial extents. Landscapes are constructed by aggregating subplots with varying species compositions.  
+   This dataset includes 16 variables, of which 7 were central to the analyses presented in the manuscript. Additional variables are retained for transparency and reproducibility of calculations during simulation.  
+   *Note: Exact values may differ slightly from those in the manuscript due to simulation variability. The number of rows was further reduced during analysis by removing outliers.*
 
 4. Variable List
 
@@ -104,30 +105,30 @@ Because this dataset is based on simulated data, the exact values may vary sligh
       Description: Number of aggregated subplots representing the spatial extent  
       Type: integer (1 to 8)  
 
-   C. Name: div  
+   B. Name: div  
       Description: planted species richness  
       Type: integer  
 
-   D. Name: Alpha_stab  
+   C. Name: Alpha_stab  
       Description: Mean temporal stability at the subplot (community) level (alpha stability)
       Type: numeric  
       Calculation: average inverse temporal coefficient of variation (μ / σ) across all subplots within a landscape   
    
-   E. Name: Gamma_stab  
+   D. Name: Gamma_stab  
       Description: Temporal stability of total biomass at the landscape level  
       Type: numeric  
       Calculation: Landscape-wide inverse temporal coefficient of variation (μ / σ)
       
-   F. Name: Spatial_AS  
+   E. Name: Spatial_AS  
       Description: Spatial asynchrony across subplots  
       Type: numeric  
-      Calculation: Alpha_stab / Gamma_stab [See `var.partition()` function (Wang et al. 2019, Ecography)]
+      Calculation: Alpha_stab / Gamma_stab (equivalent to the inverse of community-level spatial synchrony, 1 / φ_C_L2R; see `var.partition()` function, Wang et al. 2019, *Ecography*)
       
-   G. Name: Beta_div  
+   F. Name: Beta_div  
       Description: Realized richness-based beta diversity  
       Type: numeric  
-      Calculation: Gamma_div / avg_richness [See `var.partition()` function (Wang et al. 2019, Ecography)]
+      Calculation: Gamma_div / avg_richness (see `var.partition()` function, Wang et al. 2019, *Ecography*)
    
-   H. Name: Intended_BetaDiv  
+   G. Name: Intended_BetaDiv  
       Description: Number of unique species compositions per landscape based on the planted species composition (intended beta diversity)  
       Type: integer (1 to 8)
