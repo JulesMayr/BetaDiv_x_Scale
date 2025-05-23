@@ -63,6 +63,7 @@ Remove some variables that are not needed to reduce the size of the data frame. 
 ```{r}
 scaling_data <- scaling_data %>% 
   select(-c(CompID,              #composition of the first plot used when aggregating plots
+            sampleID,            #unique identifier used during the simulation procedure
             Metapopulation_stab, #metacommunity average population stability
             Pop_AS,              #population asynchrony
             Metapopulation_AS))  #regional-scale species asynchrony

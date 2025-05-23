@@ -10,19 +10,19 @@ GENERAL INFORMATION
    
       Name: Julia Mayr
       Institution: Ecology and Biodiversity Group, Utrecht University  
-      Address: [Your Address]  
+      Address: Padualaan 8, 3584 CH Utrecht, The Netherlands
       Email: j.mayr@uu.nl 
 
    Principal Investigator Contact Information:
 
       Name: Kathryn E. Barry
       Institution: Ecology and Biodiversity Group, Utrecht University  
-      Address: [Your Address]  
+      Address: Padualaan 8, 3584 CH Utrecht, The Netherlands
       Email: k.e.barry@uu.nl  
 
       Name: Yann Hautier
       Institution: Ecology and Biodiversity Group, Utrecht University  
-      Address: [Your Address]  
+      Address: Padualaan 8, 3584 CH Utrecht, The Netherlands 
       Email: y.hautier@uu.nl 
 
 3. Date of data collection:  
@@ -38,7 +38,7 @@ DATA-SPECIFIC INFORMATION FOR: sp_AGBiomass_2018_2022.csv
 ------------------------------------------------------------
 
 1. Number of variables: 9  
-2. Number of rows: [Insert number of rows]  
+2. Number of rows: [9912]  
 
 3. Description:  
    Above-ground biomass data collected annually during the summer months (June–September) in the BioCliVE experiment. Sampling occurred during peak standing biomass and involved clipping, sorting by species, and drying.
@@ -90,53 +90,44 @@ DATA-SPECIFIC INFORMATION FOR: scaling_data.csv
 **Important Note:**  
 Because this dataset is based on simulated data, the exact values may vary slightly from those presented in the manuscript. These differences are due to variation in simulation outputs across runs.
 
-1. Number of variables: 18 (the 9 variables relevant for the analysis are described below)  
-2. Number of rows: [Insert number of rows]
+1. Number of variables: 16 (the 7 variables relevant for the analysis are described below)  
+2. Number of rows: [12694]
 
 3. Description:  
    Simulation-based dataset generated to explore how biodiversity–stability relationships scale from the subplot to the landscape level. Landscapes are constructed by aggregating subplots with varying richness and species compositions (beta diversity).
    
-       *Note: The full dataset contains additional variables not described here. This section documents mainly the variables used in the analyses reported in the main text—as well as certain less intuitive variables that played a key role during the simulation procedure.*
+       *Note: The full dataset contains additional variables not described here. This section documents mainly the variables used in the analyses reported in the main text—as well as certain variables that played a key role during the simulation procedure or were used to calculate the variables of interest.*
 
 4. Variable List
 
    A. Name: Area  
       Description: Number of aggregated subplots representing the spatial extent  
       Type: integer (1 to 8)  
-      
-    A. Name: Area  
-      Description: Number of aggregated subplots representing the spatial extent  
-      Type: integer (1 to 8)  
 
-   B. Name: div  
+   C. Name: div  
       Description: planted species richness  
       Type: integer  
 
-   C. Name: Intended_BetaDiv  
-      Description: Number of unique species compositions per landscape based on the sown species composition (intended beta diversity)  
-      Type: integer  
-
    D. Name: Alpha_stab  
-      Description: Mean temporal stability at the subplot (community) level  
+      Description: Mean temporal stability at the subplot (community) level (alpha stability)
       Type: numeric  
-      Calculation: Sum of subplot SDs / mean  
-
+      Calculation: average inverse temporal coefficient of variation (μ / σ) across all subplots within a landscape   
+   
    E. Name: Gamma_stab  
       Description: Temporal stability of total biomass at the landscape level  
       Type: numeric  
-      Calculation: Landscape-wide SD / mean  
-
+      Calculation: Landscape-wide inverse temporal coefficient of variation (μ / σ)
+      
    F. Name: Spatial_AS  
       Description: Spatial asynchrony across subplots  
       Type: numeric  
-      Calculation: Gamma_stab / Alpha_stab  
-
-
-   H. Name: Beta_div  
+      Calculation: Alpha_stab / Gamma_stab [See `var.partition()` function (Wang et al. 2019, Ecography)]
+      
+   G. Name: Beta_div  
       Description: Realized richness-based beta diversity  
       Type: numeric  
-      Calculation: Gamma_div / avg_richness  
-
-
-
-[...]
+      Calculation: Gamma_div / avg_richness [See `var.partition()` function (Wang et al. 2019, Ecography)]
+   
+   H. Name: Intended_BetaDiv  
+      Description: Number of unique species compositions per landscape based on the planted species composition (intended beta diversity)  
+      Type: integer (1 to 8)
