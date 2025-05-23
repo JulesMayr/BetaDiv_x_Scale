@@ -54,9 +54,20 @@ Because the alpha scale is equal to the gamma scale when Area = 1, and because t
 
 ```{r remove all data on area=1}
 
-scaling_data<- filter(one_data, Area!= 1)
+scaling_data <- filter(one_data, Area!= 1)
 
 ```
+
+Remove some variables that are not needed to reduce the size of the data frame. Some other variables are also not used in the analysis, but might still be of interest 
+
+```{r}
+scaling_data <- scaling_data %>% 
+  select(-c(CompID,              #composition of the first plot used when aggregating plots
+            Metapopulation_stab, #metacommunity average population stability
+            Pop_AS,              #population asynchrony
+            Metapopulation_AS))  #regional-scale species asynchrony
+```
+
 
 ``` {r save}
 

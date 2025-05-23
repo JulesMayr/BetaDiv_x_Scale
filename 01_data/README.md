@@ -38,7 +38,7 @@ DATA-SPECIFIC INFORMATION FOR: sp_AGBiomass_2018_2022.csv
 ------------------------------------------------------------
 
 1. Number of variables: 9  
-2. Number of cases/rows: [Insert number of rows]  
+2. Number of rows: [Insert number of rows]  
 
 3. Description:  
    Above-ground biomass data collected annually during the summer months (June–September) in the BioCliVE experiment. Sampling occurred during peak standing biomass and involved clipping, sorting by species, and drying.
@@ -66,7 +66,7 @@ DATA-SPECIFIC INFORMATION FOR: sp_AGBiomass_2018_2022.csv
       Type: character (DD.MM.YYYY)  
 
    F. Name: div  
-      Description: Sown species richness  
+      Description: Planted species richness  
       Type: integer  
 
    G. Name: species  
@@ -81,30 +81,39 @@ DATA-SPECIFIC INFORMATION FOR: sp_AGBiomass_2018_2022.csv
       Description: Dried above-ground biomass per species  
       Type: numeric  
       Units: grams per square meter (g/m²)  
-      Method: Clipping middle 50×50 cm subplot (25×50 in 2021), sorting to species, oven-drying at 70°C for 48 hours
+      Method: Clipping middle 50×50 cm subplot (25×50 in 2021 and 2022), sorting to species, oven-drying at 70°C for 48 hours
 
-----------------------------------------------------
+------------------------------------------------------------
 DATA-SPECIFIC INFORMATION FOR: scaling_data.csv
-----------------------------------------------------
+------------------------------------------------
 
-1. Number of variables: 9  
-2. Number of cases/rows: [Insert number of rows]
+**Important Note:**  
+Because this dataset is based on simulated data, the exact values may vary slightly from those presented in the manuscript. These differences are due to variation in simulation outputs across runs.
+
+1. Number of variables: 18 (the 9 variables relevant for the analysis are described below)  
+2. Number of rows: [Insert number of rows]
 
 3. Description:  
    Simulation-based dataset generated to explore how biodiversity–stability relationships scale from the subplot to the landscape level. Landscapes are constructed by aggregating subplots with varying richness and species compositions (beta diversity).
+   
+       *Note: The full dataset contains additional variables not described here. This section documents mainly the variables used in the analyses reported in the main text—as well as certain less intuitive variables that played a key role during the simulation procedure.*
 
 4. Variable List
 
    A. Name: Area  
       Description: Number of aggregated subplots representing the spatial extent  
       Type: integer (1 to 8)  
+      
+    A. Name: Area  
+      Description: Number of aggregated subplots representing the spatial extent  
+      Type: integer (1 to 8)  
 
    B. Name: div  
-      Description: Sown species richness  
+      Description: planted species richness  
       Type: integer  
 
    C. Name: Intended_BetaDiv  
-      Description: Number of unique species compositions per landscape (intended beta diversity)  
+      Description: Number of unique species compositions per landscape based on the sown species composition (intended beta diversity)  
       Type: integer  
 
    D. Name: Alpha_stab  
@@ -122,18 +131,12 @@ DATA-SPECIFIC INFORMATION FOR: scaling_data.csv
       Type: numeric  
       Calculation: Gamma_stab / Alpha_stab  
 
-   G. Name: avg_richness  
-      Description: Realized average species richness at subplot level  
-      Type: numeric  
 
    H. Name: Beta_div  
-      Description: Realized beta diversity  
+      Description: Realized richness-based beta diversity  
       Type: numeric  
       Calculation: Gamma_div / avg_richness  
 
-   I. Name: Gamma_div  
-      Description: Realized total species richness at the landscape scale  
-      Type: numeric  
-      Calculation: avg_richness × Beta_div
+
 
 [...]
