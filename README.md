@@ -1,4 +1,4 @@
-# Mayr et al. ([date]). Scale-dependent Impact of Beta Diversity for Ecosystem Stability via Spatial Asynchrony
+# Mayr et al. ([date]) - Data and Code
 
 Dear reader,
 
