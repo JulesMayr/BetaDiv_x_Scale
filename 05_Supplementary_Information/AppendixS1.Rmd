@@ -106,7 +106,7 @@ pp_check(model.SA, ndraws = 500) +
 #### 1.2.1.2 Leave-One-Out Cross-Validation
 
 ```{r warning=FALSE, message=FALSE}
-pp_check(model.SA, type="loo_pit")+ 
+pp_check(model.SA, type="loo_pit_qq")+ 
   theme_bw() 
 ```
 
@@ -220,7 +220,7 @@ Figure S1.7: The density plot compares the real data (`y`, dark blue line) to th
 #### 2.2.1.2 Leave-One-Out Cross-Validation
 
 ```{r warning=FALSE, message=FALSE}
-pp_check(model.GS, type="loo_pit")+ 
+pp_check(model.GS, type="loo_pit_qq")+ 
   theme_bw() 
 ```
 
