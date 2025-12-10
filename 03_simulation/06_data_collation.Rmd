@@ -69,6 +69,22 @@ scaling_data <- scaling_data %>%
             Metapopulation_AS))  #regional-scale species asynchrony
 ```
 
+Subsample 60 random landscapes per planted species richness, spatial extent and compositional dissimilarity combination.
+
+```{r}
+set.seed(888)
+
+scaling_data <- scaling_data %>% 
+  group_by(Area, div, Intended_BetaDiv) %>%
+  group_modify(~ {
+    if (nrow(.x) > 60) {
+      .x %>% slice_sample(n = 60)
+    } else {
+      .x
+    }
+  }) %>%
+  ungroup()
+```
 
 ``` {r save}
 
