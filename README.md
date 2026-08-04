@@ -63,7 +63,7 @@ The project structure distinguishes three kinds of folders:
 ├── 04_bayesian_analysis           <- documentation of the analysis reported in the manuscript (HW/PG)
 │   ├── figures                    <- figures for the manuscript (PG)
 │   └── models                     <- the final bayesian models produced (PG)
-├── 05_Supplementary_Information   <- documnetation producing the supplementary material (HW)
+├── 05_Supplementary_Information   <- documnetation producing the supplementary material (HW/PG)
 ├── BetaDivXScale_Code.Rproj       <- R Project file (open this to work in the correct environment)
 ├── README.md                      <- project overview and usage guide
 ├── renv                           <- folder for package management with {renv}
