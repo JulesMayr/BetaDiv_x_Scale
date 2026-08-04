@@ -40,7 +40,7 @@ library(MetBrewer)  # pretty colors
 # load custom functions
 source("../02_functions/CustomFunctions.R")
 
-#load data
+# load data
 load("../01_data/03_derived/scaling_data.RData")
 
 ```
@@ -60,10 +60,102 @@ filtered_data <- normalize_min_max(data=filtered_data, var="Spatial_AS", epsilon
 model.SA<-readRDS("../04_bayesian_analysis/models/SA_quantile.rds")
 ```
 
+## 1.1 Prior specification
 
-## 1.1 Model and convergence diagnostics 
+**Tabe S1.1. Prior distributions used in the Bayesian model with normalized spatial asynchrony as the response variable.** All parameters were assigned the default prior specification implemented in brms (prior = "default"). The Student-t prior on the group-level standard deviation was truncated at zero.
 
-**Table S1.1: Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
+```{r, echo=FALSE}
+
+priors_SA_raw <- prior_summary(model.SA) |>
+  as.data.frame() |>
+  mutate(
+    across(
+      c(prior, class, coef, group),
+      ~ tidyr::replace_na(as.character(.x), "")
+    )
+  )
+
+default_b_prior_SA <- priors_SA_raw |>
+  filter(class == "b", coef == "", group == "") |>
+  pull(prior) |>
+  first()
+
+default_sd_prior_SA <- priors_SA_raw |>
+  filter(class == "sd", coef == "", group == "") |>
+  pull(prior) |>
+  first()
+
+prior_table_SA <- priors_SA_raw |>
+  filter(
+    (class == "b" & coef != "") |
+      class %in% c("Intercept", "phi", "zi") |
+      (class == "sd" & group == "div" & coef == "Intercept")
+  ) |>
+
+  mutate(
+    prior = case_when(
+      class == "b" & prior == "" & default_b_prior_SA != "" ~
+        default_b_prior_SA,
+      class == "b" & prior == "" ~
+        "(flat)",
+      class == "sd" & prior == "" ~
+        default_sd_prior_SA,
+      TRUE ~ prior
+    ),
+
+    `Parameter class` = case_when(
+      class == "b"         ~ "Regression coefficient",
+      class == "Intercept" ~ "Intercept",
+      class == "sd"        ~ "Group-level standard deviation",
+      class == "phi"       ~ "Precision parameter",
+      class == "zi"        ~ "Zero-inflation parameter"
+    ),
+
+    Parameter = case_when(
+      coef == "Area"          ~ "Spatial extent",
+      coef == "Beta_div"      ~ "β-diversity",
+      coef == "Beta_div:Area" ~ "β-diversity × spatial extent",
+      class == "Intercept"    ~ "Intercept",
+      class == "sd"           ~
+        "Planted species richness random intercept",
+      class == "phi"          ~ "φ",
+      class == "zi"           ~ "Zero-inflation probability"
+    ),
+
+    `Prior distribution` = case_when(
+      prior == "(flat)" ~ "flat",
+      TRUE ~ prior
+    ),
+
+    row_order = case_when(
+      class == "b" & coef == "Area"          ~ 1,
+      class == "b" & coef == "Beta_div"      ~ 2,
+      class == "b" & coef == "Beta_div:Area" ~ 3,
+      class == "Intercept"                   ~ 4,
+      class == "sd"                          ~ 5,
+      class == "phi"                         ~ 6,
+      class == "zi"                          ~ 7
+    )
+  ) |>
+
+  arrange(row_order) |>
+
+  select(
+    `Parameter class`,
+    Parameter,
+    `Prior distribution`
+  )
+
+knitr::kable(
+  prior_table_SA,
+  align = c("l", "l", "l")
+)
+
+```
+
+## 1.2 Model and convergence diagnostics 
+
+**Table S1.2. Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
 
 ```{r warning=FALSE}
 print(model.SA, digits = 3)
@@ -84,15 +176,15 @@ mcmc_trace(as.array(model.SA)) +
   )
 ```
 
-**Figure S1.1: Trace plots allow visually assessing chain convergence.**
+**Figure S1.1. Trace plots allow visually assessing chain convergence.**
 
-## 1.2 Assessment of model fit and accuracy
+## 1.3 Assessment of model fit and accuracy
 
-### 1.2.1 Posterior predictive checks
+### 1.3.1 Posterior predictive checks
 
 We assess model fit using posterior predictive checks (PPC). PPCs compare the real data to the posterior distribution, conditioned on the observed data.
 
-#### 1.2.1.1 Density plot
+#### 1.3.1.1 Density plot
 
 ```{r}
 pp_check(model.SA, ndraws = 500) + 
@@ -101,19 +193,19 @@ pp_check(model.SA, ndraws = 500) +
   ylab("Density")
 ```
 
-**Figure S1.2: The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
+**Figure S1.2. The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
 
-#### 1.2.1.2 Leave-One-Out Cross-Validation
+#### 1.3.1.3 Leave-One-Out Cross-Validation
 
-```{r warning=FALSE, message=FALSE}
+```{r warning=FALSE, message=FALSE, results='hide'}
 pp_check(model.SA, type="loo_pit_qq")+ 
   theme_bw() 
 ```
 
-**Figure S1.3: The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
+**Figure S1.3. The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
 
 
-### 1.2.2 Highest-density interval
+### 1.3.2 Highest-density interval
 
 We report 89% instead of 95% following common Bayesian practices, as it provides a better balance of precision and interpretability (McElreath, 2020).
 
@@ -130,12 +222,12 @@ new_labels <- c( #create a vector with new parameter names that reflect the term
 
 ```
 
-**Figure S1.4: We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
+**Figure S1.4. We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
 
 
-## 1.3 The Hierarchical Effect of Species Richness on Spatial Asynchrony
+## 1.4 The Hierarchical Effect of Species Richness on Spatial Asynchrony
 
-**Table S1.2: Summary table of the hierarchical effects of planted species richness on spatial asynchrony.**
+**Table S1.3. Summary table of the hierarchical effects of planted species richness on spatial asynchrony.**
 
 ```{r}
 ranef(model.SA)
@@ -166,7 +258,7 @@ model.SA %>% spread_draws(r_div[div,]) %>% # Extracts the posterior draws for r_
 
 ```
 
-**Figure S1.5. Posterior distributions of the random effects of planted species richness levels on gamma stability, comparing differences between species richness levels.** Black points represent posterior medians, and horizontal black lines indicate the 66% and 95% credible intervals. The dashed vertical line at x = 0 serves as a reference for no difference. Deviations from zero indicate the magnitude and direction of the differences in spatial asynchrony between species richness levels.
+**Figure S1.5. Posterior distributions of the random effects of planted species richness levels on spatial asynchrony, comparing differences between species richness levels.** Black points represent posterior medians, and horizontal black lines indicate the 66% and 95% credible intervals. The dashed vertical line at x = 0 serves as a reference for no difference. Deviations from zero indicate the magnitude and direction of the differences in spatial asynchrony between species richness levels.
 
 
 # 2. Effects of Spatial Asynchony and Spatial Extent on Gamma Stability
@@ -175,9 +267,87 @@ model.SA %>% spread_draws(r_div[div,]) %>% # Extracts the posterior draws for r_
 model.GS<-readRDS("../04_bayesian_analysis/models/GS_quantile.rds")
 ```
 
-## 2.1 Model and convergence diagnostics 
+## 2.1 Prior Specification
 
-**Table S1.3: Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
+**Table S1.4. Prior distributions used in the Bayesian model with gamma stability as the response variable.** All parameters were assigned the default prior specification implemented in brms (prior = "default"). Student-t priors on the group-level and residual standard deviation parameters were truncated at zero.
+
+```{r}
+
+priors_gamma_raw <- prior_summary(model.GS) |>
+  as.data.frame() |>
+  mutate(
+    across(
+      c(prior, class, coef, group),
+      ~ replace_na(as.character(.x), "")))
+
+# Extract the class-level priors that specific parameters inherit
+default_b_prior <- priors_gamma_raw |>
+  filter(class == "b", coef == "", group == "") |>
+  pull(prior) |>
+  first()
+
+default_sd_prior <- priors_gamma_raw |>
+  filter(class == "sd", coef == "", group == "") |>
+  pull(prior) |>
+  first()
+
+prior_table_gamma <- priors_gamma_raw |>
+  filter(
+    (class == "b" & coef != "") |
+      class %in% c("Intercept", "sigma") |
+      (class == "sd" & group == "div" & coef == "Intercept")) |>
+
+  mutate(
+    # Fill specific rows with their inherited class-level priors
+    prior = case_when(
+  class == "b" & prior == "" & default_b_prior != "" ~ default_b_prior,
+  class == "b" & prior == ""                         ~ "(flat)",
+  class == "sd" & prior == ""                        ~ default_sd_prior,
+  TRUE                                               ~ prior),
+
+    `Parameter class` = case_when(
+      class == "b"         ~ "Regression parameter",
+      class == "Intercept" ~ "Intercept",
+      class == "sd"        ~ "Group-level standard deviation",
+      class == "sigma"     ~ "Residual standard deviation"),
+
+    Parameter = case_when(
+      coef == "Area"            ~ "Spatial extent",
+      coef == "Spatial_AS"      ~ "Spatial asynchrony",
+      coef == "Spatial_AS:Area" ~
+        "Spatial asynchrony × spatial extent",
+      class == "Intercept"      ~ "Intercept",
+      class == "sd"             ~
+        "Planted species richness random intercept",
+      class == "sigma"          ~ "σ"),
+
+    `Prior distribution` = case_when(
+      prior == "(flat)" ~ "flat",
+      TRUE              ~ prior),
+
+    row_order = case_when(
+      class == "b" & coef == "Area"            ~ 1,
+      class == "b" & coef == "Spatial_AS"      ~ 2,
+      class == "b" & coef == "Spatial_AS:Area" ~ 3,
+      class == "Intercept"                     ~ 4,
+      class == "sd"                            ~ 5,
+      class == "sigma"                         ~ 6)) |>
+
+  arrange(row_order) |>
+
+  select(
+    `Parameter class`,
+    Parameter,
+    `Prior distribution`)
+
+knitr::kable(
+  prior_table_gamma,
+  align = c("l", "l", "l"))
+
+```
+## 2.2 Model and convergence diagnostics 
+
+**Table S1.5. Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
 
 ```{r warning=FALSE}
 print(model.GS, digits = 3)
@@ -198,15 +368,15 @@ mcmc_trace(as.array(model.GS)) +
   )
 ```
 
-**Figure S1.6: Trace plots allow visually assessing chain convergence.**
+**Figure S1.6. Trace plots allow visually assessing chain convergence.**
 
-## 2.2 Assessment of model fit and accuracy
+## 2.3 Assessment of model fit and accuracy
 
-### 2.2.1 Posterior predictive checks
+### 2.3.1 Posterior predictive checks
 
 We assess model fit using posterior predictive checks (PPC). PPCs compare the real data to the posterior distribution, conditioned on the observed data.
 
-#### 2.2.1.1 Density plot
+#### 2.3.1.1 Density plot
 
 ```{r}
 pp_check(model.GS, ndraws = 500) + 
@@ -215,19 +385,19 @@ pp_check(model.GS, ndraws = 500) +
   ylab("Density")
 ```
 
-Figure S1.7: The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
+Figure S1.7. The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
 
-#### 2.2.1.2 Leave-One-Out Cross-Validation
+#### 2.3.1.2 Leave-One-Out Cross-Validation
 
-```{r warning=FALSE, message=FALSE}
+```{r warning=FALSE, message=FALSE, results='hide'}
 pp_check(model.GS, type="loo_pit_qq")+ 
   theme_bw() 
 ```
 
-**Figure S1.8: The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
+**Figure S1.8. The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
 
 
-### 2.2.2 Highest-density interval
+### 2.3.2 Highest-density interval
 
 We report 89% instead of 95% following common Bayesian practices, as it provides a better balance of precision and interpretability (McElreath, 2020).
 
@@ -244,12 +414,12 @@ new_labels <- c( #create a vector with new parameter names that reflect the term
 
 ```
 
-**Figure S1.9: We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
+**Figure S1.9. We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
 
 
-## 2.3 The Hierarchical Effect of Species Richness on Spatial Asynchrony
+## 2.4 The Hierarchical Effect of Species Richness on Spatial Asynchrony
 
-**Table S1.4: Summary table of the hierarchical effects of planted species richness on gamma stability.**
+**Table S1.6. Summary table of the hierarchical effects of planted species richness on gamma stability.**
 
 ```{r}
 ranef(model.GS) 

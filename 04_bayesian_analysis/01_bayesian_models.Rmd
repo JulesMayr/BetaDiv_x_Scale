@@ -136,8 +136,6 @@ ggplot(filtered_data, aes(x = log.gamma)) +
 
 # 2. Descriptive statistics
 
-Some of these are used in the main text as examples.
-
 ```{r calculate general descriptive statistics}
 
 # Calculate mean and SE for each variable across levels of div
@@ -155,33 +153,6 @@ filtered_data %>%
     Gamma_stab_mean = mean(Gamma_stab, na.rm = TRUE),
     Gamma_stab_se = sd(Gamma_stab, na.rm = TRUE) / sqrt(n())  # Standard error
   )
-```
-
-```{r specific examples for spatial asynchrony given beta diversity}
-
-# Calculate the average and SE of normalized spatial asynchrony for specific beta diversity values
-filtered_data %>%
-  filter(Beta_div == 1.5 | Beta_div == 6) %>%  # Filter for Beta_div = 1.5 or 6
-  group_by(Beta_div) %>%  # Group by Beta_div
-  summarise(
-    N_Spatial_AS_mean = mean(Spatial_AS_normalized_exclusive_1, na.rm = TRUE),  # Mean of Spatial_AS
-    N_Spatial_AS_se = sd(Spatial_AS_normalized_exclusive_1, na.rm = TRUE) / sqrt(n())  # Standard Error
-  )
-
-```
-
-```{r specific examples for gamma stability given spatial asynchrony}
-
-# Calculate the average and SE of gamma stability for specific spatial asynchrony values
-filtered_data %>%
-  mutate(Spatial_AS = round(Spatial_AS, 1)) %>%  # Round Spatial_AS to 1 decimal places
-  filter(Spatial_AS == 1 | Spatial_AS == 2) %>%  # Filter for Spatial_AS = 1.12 or 2.25
-  group_by(Spatial_AS) %>%  # Group by Spatial_AS
-  summarise(
-    Gamma_stab_mean = mean(Gamma_stab, na.rm = TRUE),  # Mean of Gamma_stab
-    Gamma_stab_se = sd(Gamma_stab, na.rm = TRUE) / sqrt(n())  # Standard Error
-  )
-
 ```
 
 # 3. Hierarchical Bayesian models

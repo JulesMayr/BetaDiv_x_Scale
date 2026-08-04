@@ -68,18 +68,19 @@ SA_quantile <- readRDS("./models/SA_quantile.rds")
 hokusai.palette <- met.brewer("Hokusai1", 7)
 
 theme_set(theme_tidybayes() + panel_border())
-SA_prediction_curves <- filtered_data %>% 
-  add_epred_draws(SA_quantile, ndraws = 5000) %>%  #specify number of draws only during initial stages of plotting
+fig_2A <- filtered_data %>% 
+  add_epred_draws(SA_quantile) %>%  #specify number of draws only during initial stages of plotting
   ggplot(aes(x = Beta_div, y = Spatial_AS_normalized_exclusive_1, group = Area, color = Area)) + # group by Area to avoid messy lines
   # Add the ribbons with a gray fill for uncertainty
   stat_lineribbon(aes(y = .epred), .width = 0.95, fill = 'gray') +  # define '.width' for custom credible interval; fill = "gray"
   # Faceting
-  facet_grid(.~div) +
+  facet_grid(.~ div, labeller = labeller(
+    div = function(x) paste0("Species richness:\n", x))) +
   # Axis labels
   xlab("Beta Diversity") +
   ylab("Normalized Spatial Asynchrony") +
   # Color scale for 'Area'
-  scale_color_gradientn(name = "Area", colors = hokusai.palette) +
+  scale_color_gradientn(name = "Spatial\nExtent", colors = hokusai.palette) +
   # Modify axes's appearance
   theme(axis.title = element_text(size = 20, colour = "black"), 
         axis.line.x = element_line(colour = "black"),
@@ -89,15 +90,16 @@ SA_prediction_curves <- filtered_data %>%
         legend.text  = element_text(size = 15,colour="black"),
         legend.title = element_text(size = 20,colour="black"),
         legend.key.height = unit(0.5, "null"),
-        strip.text = element_text(size = 20),
+        strip.text = element_text(size = 13),
         axis.ticks = element_line(colour="black"),
         panel.border = element_rect(colour="black", fill=NA))
 
 
-print(SA_prediction_curves)
+# Print the plot
+print(fig_2A)
 
 # Save the plot using ggsave()
-ggsave("./figures/Fig.2A.png", plot = SA_prediction_curves, width = 8, height = 6, dpi = 600)
+ggsave("./figures/Fig.2A.png", plot = fig_2A, width = 8, height = 6, dpi = 900)
 
 ```
 
@@ -106,8 +108,8 @@ ggsave("./figures/Fig.2A.png", plot = SA_prediction_curves, width = 8, height = 
 ```{r Fig. 2B, warning=FALSE}
 
 theme_set(theme_tidybayes() + panel_border())
-SA_prediction_curves_beta2_area.facet <- filtered_data %>% 
-  add_epred_draws(SA_quantile, ndraws = 5000) %>% # specify number of draws only during initial stages of plotting
+fig_2B <- filtered_data %>% 
+  add_epred_draws(SA_quantile) %>% # specify number of draws only during initial stages of plotting
   mutate(div.factor = factor(div, levels = c(1, 4, 8))) %>% # group by div, and reorder levels for legend
   ggplot(aes(x = Beta_div, 
              y = Spatial_AS_normalized_exclusive_1, 
@@ -119,12 +121,13 @@ SA_prediction_curves_beta2_area.facet <- filtered_data %>%
                   fill = 'gray', # color of the ribbon
                   color = 'black') + # ensures the lines are shown in the legend 
   # Faceting
-  facet_grid(.~Area) +
+  facet_grid(.~ Area, labeller = labeller(
+    Area = function(x) paste0("Spatial\nExtent:\n", x))) +
   # Axis labels
   xlab("Beta Diversity") +
   ylab("Normalized Spatial Asynchrony") +
   # Manual linetype scale and black line color
-  scale_linetype_manual(name = "Planted\nRichness", values = c("solid", "dashed", "dotted")) + # legend specifications
+  scale_linetype_manual(name = "Species\nRichness", values = c("solid", "dashed", "dotted")) + # legend specifications
   # Chop plot to zoom in where we want to focus
   coord_cartesian(xlim = c(1, 2)) + 
   # Modify axes's appearance
@@ -137,53 +140,16 @@ SA_prediction_curves_beta2_area.facet <- filtered_data %>%
         legend.text  = element_text(size = 15,colour="black"),
         legend.title = element_text(size = 20,colour="black"),
         legend.key.width = unit(1.5, "cm"),  # Increase legend key width to show linetypes clearly
-        strip.text = element_text(size = 20),
+        strip.text = element_text(size = 13),
         axis.ticks = element_line(colour="black"),
         panel.border = element_rect(colour="black", fill=NA))
   
 
 # Print the plot
-print(SA_prediction_curves_beta2_area.facet)
+print(fig_2B)
 
 # Save the plot using ggsave()
-ggsave("./figures/Fig.2B.png", plot = SA_prediction_curves_beta2_area.facet, width = 8, height = 6, dpi = 600)
+ggsave("./figures/Fig.2B.png", plot = fig_2B, width = 8, height = 6, dpi = 900)
 
-```
-# Addressing some feedback
-
-Shaopeng thinks a plot with spatial extent on the x-axis, and spatial asynchrony or gamma stability on the y-axis with alpha diversity as a co-variate is more intuitive.
-
-```{r}
-
-theme_set(theme_tidybayes() + panel_border())
-filtered_data %>% 
-add_epred_draws(SA_quantile, ndraws = 1000) %>%  # Add predicted draws from model
-mutate(div.factor = factor(div, levels = c(1, 4, 8))) %>%  # Convert div to a factor with ordered levels
-ggplot(aes(x = Area, 
-           y = Spatial_AS_normalized_exclusive_1, 
-           group = div.factor, 
-           linetype = div.factor)) +  # Map linetype and grouping to div.factor
-# Add the ribbons with a gray fill for uncertainty
-stat_lineribbon(aes(y = .epred, linetype = div.factor),  # Use predicted values with linetype mapping
-                .width = 0.95,  # Width of the 95% credible interval
-                fill = 'gray',  # Fill color for ribbon
-                color = 'black') +  # Line color
-# Axis labels
-xlab("Spatial Extent") +
-ylab("Normalized Spatial Asynchrony") +
-# Manual linetype scale and black line color
-scale_linetype_manual(name = "Planted\nRichness", values = c("solid", "dashed", "dotted")) +  # Legend settings
-# Modify axes's appearance
-theme(axis.title = element_text(size = 20, colour = "black"), 
-      axis.line.x = element_line(colour = "black"),
-      axis.line.y = element_line(colour = "black"),
-      axis.text.x = element_text(size = 15,colour="black"),
-      axis.text.y = element_text(size = 15,colour="black"),
-      legend.text  = element_text(size = 15,colour="black"),
-      legend.title = element_text(size = 20,colour="black"),
-      legend.key.width = unit(1.5, "cm"),  # Increase legend key width to show linetypes clearly
-      strip.text = element_text(size = 20),
-      axis.ticks = element_line(colour="black"),
-      panel.border = element_rect(colour="black", fill=NA))
 ```
 

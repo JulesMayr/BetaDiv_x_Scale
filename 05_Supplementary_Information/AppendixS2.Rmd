@@ -1,7 +1,20 @@
 ---
-title: "Appendix S2: Changes of Beta Diversity, Spatial Asynchrony and Gamma Stability with Spatial Extent"
+title: "Appendix S2: Supplementary figures"
 output: html_document
 ---
+<style>
+.figure-frame {
+  display: block;
+  border: 2px solid #d9d9d9;
+  padding: 16px;
+  margin: 20px 0 28px 0;
+  background-color: white;
+}
+.figure-frame img {
+  display: block;
+  width: 100%;
+}
+</style>
 
 ```{r General Settings, include=FALSE}
 # include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
@@ -23,6 +36,15 @@ options(stringsAsFactors = F)
 library(tidyverse)  # tidy data for data manipulation and visualization
 library(tidybayes)  # tidy data for Bayesian models
 library(knitr)      # data manipulation
+library(cowplot)    # for nice plot layout
+library(patchwork)  # for nice plot layout
+library(brms)       # fitting Bayesian models
+library(bayesplot)  # visualization of Bayesian models
+library(rstan)      # bayesian models
+library(cmdstanr)   # using the more-up-to-date cmdstanr instead of rstan as the underlying MCMC engine to avoid ***recursive gc invocation warnings
+library(bayestestR) # helpful for some initial plotting 
+library(see)        # the plots in the above package don't work without this 
+library(loo)        # to do leave one out checks
 library(MetBrewer)  # pretty colors
 
 # load custom functions
@@ -31,10 +53,6 @@ source("../02_functions/CustomFunctions.R")
 # load data
 load("../01_data/03_derived/scaling_data.RData")
 
-```
-
-```{r set theme for figure}
-theme_set(theme_tidybayes())
 ```
 
 ```{r remove outliers and normalize data}
@@ -67,64 +85,366 @@ summary_stats <- filtered_data %>%
                names_sep = "_")
 ```
 
-```{r plot 1}
+```{r plotting settings}
+hokusai.palette <- met.brewer("Hokusai1", 3)
 
-hokusai.palette <- met.brewer("Hokusai1", 2)
-
-ggplot(summary_stats %>% filter(metric %in% c("Beta.div", "Spatial.AS")), 
-       aes(x = area.factor, y = mean, color = metric, group = metric)) +
-  geom_point(size = 3) +  
-  geom_line(linewidth = 1) +  
-  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +  
-  facet_grid(~ div.factor)+
-  xlab("Spatial Extent")+
-  ylab("Mean (± SE)")+
-  scale_fill_manual(name = "Variable", values = hokusai.palette, labels = c("Beta Diversity", "Spatial Asynchrony")) +  # Custom labels
-  scale_colour_manual(name = "Variable", values = hokusai.palette, labels = c("Beta Diversity", "Spatial Asynchrony")) +   
-  theme_bw() +
-  theme(axis.title = element_text(size = 15, colour = "black"), #to modify axes appearance
-        axis.line.x = element_line(colour = "black"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.x = element_text(size = 10,colour="black"),
-        axis.text.y = element_text(size = 10,colour="black"),
-        legend.text  = element_text(size = 10,colour="black"),
-        legend.title = element_text(size = 15,colour="black"),
-        strip.text = element_text(size = 15),
-        axis.ticks = element_line(colour="black"),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.border = element_rect(colour="black", fill=NA))
+base_theme <- theme_tidybayes() + 
+  panel_border()+
+  theme(
+    axis.title = element_text(size = 15, colour = "black"),
+    axis.line.x = element_line(colour = "black"),
+    axis.line.y = element_line(colour = "black"),
+    axis.text.x = element_text(size = 10, colour = "black"),
+    axis.text.y = element_text(size = 10, colour = "black"),
+    legend.position = "none",
+    strip.text = element_text(size = 13),
+    axis.ticks = element_line(colour = "black"))
 ```
 
-**Figure S2.1: The average change in beta diversity and spatial asynchrony (± standard error) across spatial extents.** Spatial extent corresponds to the number of aggregated communities. Planted species richness levels are represented in the panels.
+```{r Fig-S2.1-panel-A}
+Fig.S2A <- ggplot(
+  summary_stats %>% filter(metric %in% c("Beta.div", "Spatial.AS")),
+  aes(x = area.factor, y = mean, colour = metric, group = metric)
+) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
+  facet_grid(
+    ~ div.factor,
+    labeller = labeller(
+      div.factor = function(x) paste0("Species richness:\n", x)
+    )
+  ) +
+  xlab("Spatial Extent") +
+  ylab("Mean (± SE)") +
+  scale_colour_manual(
+    name = NULL,
+    values = c(
+      "Beta.div" = hokusai.palette[1],
+      "Spatial.AS" = hokusai.palette[2],
+      "Gamma.stab" = hokusai.palette[3]
+    ),
+    labels = c(
+      "Beta Diversity",
+      "Spatial Asynchrony",
+      "Gamma Stability"
+    ),
+    breaks = c("Beta.div", "Spatial.AS", "Gamma.stab"),
+    drop = FALSE
+  ) +
+  base_theme
+```
+
+```{r Fig-S2.1-panel-B}
+Fig.S2B <- ggplot(
+  summary_stats %>% filter(metric %in% c("Gamma.stab", "Spatial.AS")),
+  aes(x = area.factor, y = mean, colour = metric, group = metric)
+) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
+  facet_grid(
+    ~ div.factor,
+    labeller = labeller(
+      div.factor = function(x) paste0("Species richness:\n", x)
+    )
+  ) +
+  xlab("Spatial Extent") +
+  ylab("Mean (± SE)") +
+  scale_colour_manual(
+    name = NULL,
+    values = c(
+      "Beta.div" = hokusai.palette[1],
+      "Spatial.AS" = hokusai.palette[2],
+      "Gamma.stab" = hokusai.palette[3]
+    ),
+    labels = c(
+      "Beta Diversity",
+      "Spatial Asynchrony",
+      "Gamma Stability"
+    ),
+    breaks = c("Beta.div", "Spatial.AS", "Gamma.stab"),
+    drop = FALSE
+  ) +
+  base_theme
+```
+
+```{r Fig-S2.1-legend}
+legend_plot <- ggplot(
+  tibble(
+    metric = factor(
+      c("Beta.div", "Spatial.AS", "Gamma.stab"),
+      levels = c("Beta.div", "Spatial.AS", "Gamma.stab")
+    ),
+    x = 1,
+    y = 1
+  ),
+  aes(x = x, y = y, colour = metric)
+) +
+  geom_point(size = 3) +
+  scale_colour_manual(
+    name = NULL,
+    values = c(
+      "Beta.div" = hokusai.palette[1],
+      "Spatial.AS" = hokusai.palette[2],
+      "Gamma.stab" = hokusai.palette[3]
+    ),
+    labels = c(
+      "Beta Diversity",
+      "Spatial Asynchrony",
+      "Gamma Stability"
+    )
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "top",
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 14, colour = "black")
+  )
+
+shared_legend <- cowplot::get_legend(legend_plot)
+```
+
+<div class="figure-frame">
+
+```{r Fig-S2.1-combine, warning=FALSE, fig.width=8.3, fig.height=10.5, out.width="100%"}
+Fig.S2 <- cowplot::plot_grid(
+  shared_legend,
+  (
+    (Fig.S2A) / (Fig.S2B) +
+      plot_annotation(tag_levels = "A") &
+      theme(plot.tag = element_text(size = 18, face = "bold"))
+  ),
+  ncol = 1,
+  rel_heights = c(0.08, 1)
+)
+
+Fig.S2
+```
+
+</div>
+
+**Figure S2.1: The average change in beta diversity, spatial asynchrony, and gamma stability (± standard error) across spatial extents for three levels of planted species richness.** Spatial extent corresponds to the number of aggregated communities. Summary statistics are calculated from raw values. **A.** The average change in beta diversity and spatial asynchrony across spatial extents. **B.** The average change in spatial asynchrony and gamma stability across spatial extents. The y-axes are scaled separately between panels because beta diversity, spatial asynchrony, and gamma stability differ in their numerical ranges.
+
+</br>
+</br>
+
+```{r theme settings for supplementary results}
+rawdata_theme <- theme_tidybayes() + 
+  panel_border()+
+  theme(
+    axis.title = element_text(size = 15, colour = "black"),
+    axis.line.x = element_line(colour = "black"),
+    axis.line.y = element_line(colour = "black"),
+    axis.text.x = element_text(size = 10, colour = "black"),
+    axis.text.y = element_text(size = 10, colour = "black"),
+    legend.text = element_text(size = 12, colour = "black"),
+    legend.title = element_text(size = 15, colour = "black"),
+    strip.text = element_text(size = 13),
+    axis.ticks = element_line(colour = "black"))
+```
+
+```{r import model 1}
+SA_quantile<-readRDS("../04_bayesian_analysis/models/SA_quantile.rds")
+```
 
 ```{r}
-hokusai.palette <- met.brewer("Hokusai1", 2)
+filtered_data_SA <- filtered_data %>%
+  select(Beta_div, Spatial_AS_normalized_exclusive_1, Area, div) 
+```
 
-ggplot(summary_stats %>% filter(metric %in% c("Gamma.stab", "Spatial.AS")), 
-       aes(x = area.factor, y = mean, color = metric, group = metric)) +
-  geom_point(size = 3) +  
-  geom_line(linewidth = 1) +  
-  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +  
-  facet_grid(~ div.factor)+
-  xlab("Spatial Extent")+
-  ylab("Mean (± SE)")+
-  scale_fill_manual(name = "Variable", values = hokusai.palette, labels = c("Gamma Stability", "Spatial Asynchrony")) +  # Custom labels
-  scale_colour_manual(name = "Variable", values = hokusai.palette, labels = c("Gamma Stability", "Spatial Asynchrony")) +   
-  theme_bw() +
-  theme(axis.title = element_text(size = 15, colour = "black"), #to modify axes appearance
-        axis.line.x = element_line(colour = "black"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.x = element_text(size = 10,colour="black"),
-        axis.text.y = element_text(size = 10,colour="black"),
-        legend.text  = element_text(size = 10,colour="black"),
-        legend.title = element_text(size = 15,colour="black"),
-        strip.text = element_text(size = 15),
-        axis.ticks = element_line(colour="black"),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.border = element_rect(colour="black", fill=NA))
+```{r}
+SA_prediction <- filtered_data_SA %>% 
+  add_epred_draws(SA_quantile, ndraws = 5000)
+```
+
+```{r Fig.S2.2A, warning=FALSE}
+
+# define colour palette
+hokusai.palette <- met.brewer("Hokusai1", 7)
+
+Fig.S2.2A <- SA_prediction %>% 
+  ggplot(aes(x = Beta_div, y = Spatial_AS_normalized_exclusive_1, group = Area, color = Area)) + # group by Area to avoid messy lines
+  # Add raw data points
+  geom_point(data = filtered_data, aes(x = Beta_div,
+                                      y = Spatial_AS_normalized_exclusive_1,
+                                      color = Area),
+             inherit.aes = FALSE, alpha = 0.1, size = 1, shape = 19) +
+  # Add the ribbons with a gray fill for uncertainty
+  stat_lineribbon(aes(y = .epred), .width = 0.95, fill = 'gray') +  # define '.width' for custom credible interval; fill = "gray"
+  # Faceting
+  facet_grid(.~ div, labeller = labeller(
+    div = function(x) paste0("Species richness:\n", x))) +
+  # Axis labels
+  xlab("Beta Diversity") +
+  ylab("Normalized Spatial Asynchrony") +
+  # Color scale for 'Area'
+  scale_color_gradientn(name = "Spatial\nExtent", colors = hokusai.palette) +
+  # Modify axes's appearance
+  rawdata_theme + 
+  theme(legend.key.height = unit(0.5, "null"))
 
 ```
 
-**Figure S2.2: The average change in spatial asynchrony and gamma stability (± standard error) across spatial extents.** Spatial extent corresponds to the number of aggregated communities. Planted species richness levels are represented in the panels.
+```{r Fig.S2.2B, warning=FALSE}
+
+Fig.S2.2B <- SA_prediction %>% # specify number of draws only during initial stages of plotting
+  mutate(div.factor = factor(div, levels = c(1, 4, 8))) %>% # group by div, and reorder levels for legend
+  ggplot(aes(x = Beta_div, 
+             y = Spatial_AS_normalized_exclusive_1, 
+             group = div.factor, 
+             linetype = div.factor)) + # ensures that linetype is mapped to div.factor
+  # Add raw data points
+  geom_point(data = filtered_data, aes(x = Beta_div, y = Spatial_AS_normalized_exclusive_1),
+  inherit.aes = FALSE,
+  alpha = 0.1,
+  size = 1,
+  shape = 19,
+  colour = "black") +
+  # Add the ribbons with a gray fill for uncertainty
+  stat_lineribbon(aes(y = .epred, linetype = div.factor), #ensures that linetype is mapped to div.factor
+                  .width = 0.95, # width of the credible interval
+                  fill = 'gray', # color of the ribbon
+                  color = 'black') + # ensures the lines are shown in the legend 
+  # Faceting
+  facet_grid(.~ Area, labeller = labeller(
+    Area = function(x) paste0("Spatial\nExtent:\n", x))) +
+  # Axis labels
+  xlab("Beta Diversity") +
+  ylab("Normalized Spatial Asynchrony") +
+  # Manual linetype scale and black line color
+  scale_linetype_manual(name = "Species\nRichness", values = c("solid", "dashed", "dotted")) + # legend specifications
+  # Chop plot to zoom in where we want to focus
+  coord_cartesian(xlim = c(1, 2)) + 
+  # Modify axes's appearance
+  scale_x_continuous(breaks = c(1, 2))+ # reduce number of x axis ticks
+  rawdata_theme +
+  theme(legend.key.width = unit(1.5, "cm"))
+  
+
+```
+
+<div class="figure-frame">
+
+```{r Fig-S2.2-combine, warning=FALSE, fig.width=8.3, fig.height=10.5, out.width="100%"}
+# Combine SA raw-data figure
+
+FigS2.2 <- (Fig.S2.2A/Fig.S2.2B) +
+  plot_annotation(tag_levels = "A") &
+  theme(plot.tag = element_text(size = 20))
+
+FigS2.2
+```
+
+</div>
+
+**Figure S2.2: The relationship between β-diversity and normalized spatial asynchrony across spatial extents for three levels of planted species richness, including raw data points.** Lines show posterior mean predictions, and ribbons represent 95% credible intervals, indicating uncertainty in the fitted mean relationship. **A.** The relationship across the full range of β-diversity. The levels of planted species richness are represented in the facets. **B.** The relationship for a reduced range of β-diversity that could be replicated across all species richness treatments. Spatial extent is represented in the facets.
+
+</br>
+</br>
+
+```{r import model 2}
+GS_quantile<-readRDS("../04_bayesian_analysis/models/GS_quantile.rds")
+```
+
+```{r}
+filtered_data_GS <- filtered_data %>%
+  select(Spatial_AS, Gamma_stab, Area, div) 
+```
+
+```{r}
+GS_prediction <- filtered_data_GS %>% 
+  add_epred_draws(GS_quantile, ndraws = 5000)
+```
+
+```{r Fig.S2.3A, warning=FALSE}
+
+# define colour palette
+hokusai.palette <- met.brewer("Hokusai1", 7)
+
+Fig.S2.3A <- GS_prediction %>% 
+  ggplot(aes(x = Spatial_AS, y = Gamma_stab, group = Area, color = Area)) + # group by Area to avoid messy lines
+  # Add raw data points
+  geom_point(data = filtered_data, aes(x = Spatial_AS,
+                                      y = Gamma_stab,
+                                      color = Area),
+             inherit.aes = FALSE, alpha = 0.1, size = 1, shape = 19) +
+  # Add the ribbons with a gray fill for uncertainty
+  stat_lineribbon(aes(y = .epred), .width = 0.95, fill = 'gray') +  # define '.width' for custom credible interval; fill = "gray"
+  # Faceting
+  facet_grid(.~ div, labeller = labeller(
+    div = function(x) paste0("Species richness:\n", x))) +
+  # Axis labels
+  xlab("Spatial Asynchrony") +
+  ylab("Gamma Stability") +
+  # Modify axes's appearance
+  #xlim(0.99,2.3)+
+  # Color scale for 'Area'
+  scale_color_gradientn(name = "Spatial\nExtent", colors = hokusai.palette) +
+  # Modify axes's appearance
+  rawdata_theme + 
+  theme(legend.key.height = unit(0.5, "null"))
+
+```
+
+```{r Fig.S2.3B, warning=FALSE}
+
+Fig.S2.3B <- GS_prediction %>% # specify number of draws only during initial stages of plotting
+  mutate(div.factor = factor(div, levels = c(1, 4, 8))) %>% # group by div, and reorder levels for legend
+  ggplot(aes(x = Spatial_AS, 
+             y = Gamma_stab, 
+             group = div.factor, 
+             linetype = div.factor)) + # ensures that linetype is mapped to div.factor
+  # Add raw data points
+  geom_point(data = filtered_data, aes(x = Spatial_AS, y = Gamma_stab),
+  inherit.aes = FALSE,
+  alpha = 0.1,
+  size = 1,
+  shape = 19,
+  colour = "black") +
+  # Add the ribbons with a gray fill for uncertainty
+  stat_lineribbon(aes(y = .epred, linetype = div.factor), #ensures that linetype is mapped to div.factor
+                  .width = 0.95, # width of the credible interval
+                  fill = 'gray', # color of the ribbon
+                  color = 'black') + # ensures the lines are shown in the legend 
+  # Faceting
+  facet_grid(.~ Area, labeller = labeller(
+    Area = function(x) paste0("Spatial\nExtent:\n", x))) +
+  # Axis labels
+  xlab("Spatial Asynchrony") +
+  ylab("Gamma Stability") +
+  # Manual linetype scale and black line color
+  scale_linetype_manual(name = "Species\nRichness", values = c("solid", "dashed", "dotted")) + # legend specifications
+  # Chop plot to zoom in where we want to focus
+  coord_cartesian(xlim = c(1, 1.4),
+                  ylim = c(1,3.5)) +
+  scale_x_continuous(breaks = c(1,1.2,1.4))+ # reduce number of x axis ticks
+  # Modify axes's appearance
+  rawdata_theme +
+  theme(legend.key.width = unit(1.5, "cm"),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+  
+
+```
+
+<div class="figure-frame">
+
+```{r Fig-S2.3-combine, warning=FALSE, fig.width=8.3, fig.height=10.5, out.width="100%"}
+# Combine SA raw-data figure
+
+FigS2.2 <- (Fig.S2.3A/Fig.S2.3B) +
+  plot_annotation(tag_levels = "A") &
+  theme(plot.tag = element_text(size = 20))
+
+FigS2.2
+```
+
+</div>
+
+**Figure S2.3: The relationship between spatial asynchrony and gamma stability across spatial extents for three levels of planted species richness, including raw data points.** Lines show posterior mean predictions, and ribbons represent 95% credible intervals, indicating uncertainty in the fitted mean relationship. **A.** The relationship across the full range of spatial asynchrony and gamma stability. The levels of planted species richness are represented in the facets. **B.** The relationship for a reduced range of spatial asynchrony and gamma stability that could be replicated across all species richness treatments. Spatial extent is represented in the facets.
+
+</br>
+</br>
+
 
 
