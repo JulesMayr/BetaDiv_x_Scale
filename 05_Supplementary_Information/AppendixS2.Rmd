@@ -1,20 +1,43 @@
 ---
-title: "Appendix S2: Supplementary figures"
+title: "Scale-Dependent Impacts of Beta Diversity on Temporal Stability via Spatial Asynchrony"
+author: "Julia Mayr, Merel B. Soons, Shaopeng Wang, Yann Hautier, Kathryn E. Barry"
+subtitle: "Ecology"
 output: html_document
 ---
+
 <style>
-.figure-frame {
-  display: block;
-  border: 2px solid #d9d9d9;
-  padding: 16px;
-  margin: 20px 0 28px 0;
-  background-color: white;
+/* Separate title page */
+#header {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
 }
-.figure-frame img {
-  display: block;
-  width: 100%;
+
+/* Set display order */
+#header .title {
+  order: 1;
+}
+
+#header .author {
+  order: 2;
+}
+
+#header .subtitle {
+  order: 3;
+}
+
+/* Start appendix on a new printed page */
+@media print {
+  #header {
+    break-after: page;
+    page-break-after: always;
+  }
 }
 </style>
+
+# Appendix S2: Supplementary figures
 
 ```{r General Settings, include=FALSE}
 # include: whether to include anything from a code chunk in the output document --> when include = F, this whole chunk is excluded in the output!
@@ -101,8 +124,8 @@ base_theme <- theme_tidybayes() +
     axis.ticks = element_line(colour = "black"))
 ```
 
-```{r Fig-S2.1-panel-A}
-Fig.S2A <- ggplot(
+```{r Fig-S1-panel-A}
+Fig.S1A <- ggplot(
   summary_stats %>% filter(metric %in% c("Beta.div", "Spatial.AS")),
   aes(x = area.factor, y = mean, colour = metric, group = metric)
 ) +
@@ -135,8 +158,8 @@ Fig.S2A <- ggplot(
   base_theme
 ```
 
-```{r Fig-S2.1-panel-B}
-Fig.S2B <- ggplot(
+```{r Fig-S1-panel-B}
+Fig.S1B <- ggplot(
   summary_stats %>% filter(metric %in% c("Gamma.stab", "Spatial.AS")),
   aes(x = area.factor, y = mean, colour = metric, group = metric)
 ) +
@@ -169,7 +192,7 @@ Fig.S2B <- ggplot(
   base_theme
 ```
 
-```{r Fig-S2.1-legend}
+```{r Fig-S1-legend}
 legend_plot <- ggplot(
   tibble(
     metric = factor(
@@ -207,11 +230,11 @@ shared_legend <- cowplot::get_legend(legend_plot)
 
 <div class="figure-frame">
 
-```{r Fig-S2.1-combine, warning=FALSE, fig.width=8.3, fig.height=10.5, out.width="100%"}
-Fig.S2 <- cowplot::plot_grid(
+```{r Fig-S1-combine, warning=FALSE, fig.width=8.3, fig.height=10.5, out.width="100%"}
+Fig.S1 <- cowplot::plot_grid(
   shared_legend,
   (
-    (Fig.S2A) / (Fig.S2B) +
+    (Fig.S1A) / (Fig.S1B) +
       plot_annotation(tag_levels = "A") &
       theme(plot.tag = element_text(size = 18, face = "bold"))
   ),
@@ -219,12 +242,12 @@ Fig.S2 <- cowplot::plot_grid(
   rel_heights = c(0.08, 1)
 )
 
-Fig.S2
+Fig.S1
 ```
 
 </div>
 
-**Figure S2.1: The average change in beta diversity, spatial asynchrony, and gamma stability (± standard error) across spatial extents for three levels of planted species richness.** Spatial extent corresponds to the number of aggregated communities. Summary statistics are calculated from raw values. **A.** The average change in beta diversity and spatial asynchrony across spatial extents. **B.** The average change in spatial asynchrony and gamma stability across spatial extents. The y-axes are scaled separately between panels because beta diversity, spatial asynchrony, and gamma stability differ in their numerical ranges.
+**Figure S1: The average change in beta diversity, spatial asynchrony, and gamma stability (± standard error) across spatial extents for three levels of planted species richness.** Spatial extent corresponds to the number of aggregated communities. Summary statistics are calculated from raw values. **A.** The average change in beta diversity and spatial asynchrony across spatial extents. **B.** The average change in spatial asynchrony and gamma stability across spatial extents. The y-axes are scaled separately between panels because beta diversity, spatial asynchrony, and gamma stability differ in their numerical ranges.
 
 </br>
 </br>
@@ -258,12 +281,12 @@ SA_prediction <- filtered_data_SA %>%
   add_epred_draws(SA_quantile, ndraws = 5000)
 ```
 
-```{r Fig.S2.2A, warning=FALSE}
+```{r Fig.S2A, warning=FALSE}
 
 # define colour palette
 hokusai.palette <- met.brewer("Hokusai1", 7)
 
-Fig.S2.2A <- SA_prediction %>% 
+Fig.S2A <- SA_prediction %>% 
   ggplot(aes(x = Beta_div, y = Spatial_AS_normalized_exclusive_1, group = Area, color = Area)) + # group by Area to avoid messy lines
   # Add raw data points
   geom_point(data = filtered_data, aes(x = Beta_div,
@@ -286,9 +309,9 @@ Fig.S2.2A <- SA_prediction %>%
 
 ```
 
-```{r Fig.S2.2B, warning=FALSE}
+```{r Fig.S2B, warning=FALSE}
 
-Fig.S2.2B <- SA_prediction %>% # specify number of draws only during initial stages of plotting
+Fig.S2B <- SA_prediction %>% # specify number of draws only during initial stages of plotting
   mutate(div.factor = factor(div, levels = c(1, 4, 8))) %>% # group by div, and reorder levels for legend
   ggplot(aes(x = Beta_div, 
              y = Spatial_AS_normalized_exclusive_1, 
@@ -326,19 +349,19 @@ Fig.S2.2B <- SA_prediction %>% # specify number of draws only during initial sta
 
 <div class="figure-frame">
 
-```{r Fig-S2.2-combine, warning=FALSE, fig.width=8.3, fig.height=10.5, out.width="100%"}
+```{r Fig-S2-combine, warning=FALSE, fig.width=8.3, fig.height=10.5, out.width="100%"}
 # Combine SA raw-data figure
 
-FigS2.2 <- (Fig.S2.2A/Fig.S2.2B) +
+FigS2 <- (Fig.S2A/Fig.S2B) +
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(size = 20))
 
-FigS2.2
+FigS2
 ```
 
 </div>
 
-**Figure S2.2: The relationship between β-diversity and normalized spatial asynchrony across spatial extents for three levels of planted species richness, including raw data points.** Lines show posterior mean predictions, and ribbons represent 95% credible intervals, indicating uncertainty in the fitted mean relationship. **A.** The relationship across the full range of β-diversity. The levels of planted species richness are represented in the facets. **B.** The relationship for a reduced range of β-diversity that could be replicated across all species richness treatments. Spatial extent is represented in the facets.
+**Figure S2: The relationship between β-diversity and normalized spatial asynchrony across spatial extents for three levels of planted species richness, including raw data points.** Lines show posterior mean predictions, and ribbons represent 95% credible intervals, indicating uncertainty in the fitted mean relationship. **A.** The relationship across the full range of β-diversity. The levels of planted species richness are represented in the facets. **B.** The relationship for a reduced range of β-diversity that could be replicated across all species richness treatments. Spatial extent is represented in the facets.
 
 </br>
 </br>
@@ -357,12 +380,12 @@ GS_prediction <- filtered_data_GS %>%
   add_epred_draws(GS_quantile, ndraws = 5000)
 ```
 
-```{r Fig.S2.3A, warning=FALSE}
+```{r Fig.S3A, warning=FALSE}
 
 # define colour palette
 hokusai.palette <- met.brewer("Hokusai1", 7)
 
-Fig.S2.3A <- GS_prediction %>% 
+Fig.S3A <- GS_prediction %>% 
   ggplot(aes(x = Spatial_AS, y = Gamma_stab, group = Area, color = Area)) + # group by Area to avoid messy lines
   # Add raw data points
   geom_point(data = filtered_data, aes(x = Spatial_AS,
@@ -383,13 +406,14 @@ Fig.S2.3A <- GS_prediction %>%
   scale_color_gradientn(name = "Spatial\nExtent", colors = hokusai.palette) +
   # Modify axes's appearance
   rawdata_theme + 
-  theme(legend.key.height = unit(0.5, "null"))
+  theme(legend.key.height = unit(0.5, "null"),
+        axis.text.x = element_text(angle = 45, hjust = 1))
 
 ```
 
-```{r Fig.S2.3B, warning=FALSE}
+```{r Fig.S3B, warning=FALSE}
 
-Fig.S2.3B <- GS_prediction %>% # specify number of draws only during initial stages of plotting
+Fig.S3B <- GS_prediction %>% # specify number of draws only during initial stages of plotting
   mutate(div.factor = factor(div, levels = c(1, 4, 8))) %>% # group by div, and reorder levels for legend
   ggplot(aes(x = Spatial_AS, 
              y = Gamma_stab, 
@@ -429,19 +453,19 @@ Fig.S2.3B <- GS_prediction %>% # specify number of draws only during initial sta
 
 <div class="figure-frame">
 
-```{r Fig-S2.3-combine, warning=FALSE, fig.width=8.3, fig.height=10.5, out.width="100%"}
+```{r Fig-S3-combine, warning=FALSE, fig.width=8.3, fig.height=10.5, out.width="100%"}
 # Combine SA raw-data figure
 
-FigS2.2 <- (Fig.S2.3A/Fig.S2.3B) +
+FigS3 <- (Fig.S3A/Fig.S3B) +
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(size = 20))
 
-FigS2.2
+FigS3
 ```
 
 </div>
 
-**Figure S2.3: The relationship between spatial asynchrony and gamma stability across spatial extents for three levels of planted species richness, including raw data points.** Lines show posterior mean predictions, and ribbons represent 95% credible intervals, indicating uncertainty in the fitted mean relationship. **A.** The relationship across the full range of spatial asynchrony and gamma stability. The levels of planted species richness are represented in the facets. **B.** The relationship for a reduced range of spatial asynchrony and gamma stability that could be replicated across all species richness treatments. Spatial extent is represented in the facets.
+**Figure S3: The relationship between spatial asynchrony and gamma stability across spatial extents for three levels of planted species richness, including raw data points.** Lines show posterior mean predictions, and ribbons represent 95% credible intervals, indicating uncertainty in the fitted mean relationship. **A.** The relationship across the full range of spatial asynchrony and gamma stability. The levels of planted species richness are represented in the facets. **B.** The relationship for a reduced range of spatial asynchrony and gamma stability that could be replicated across all species richness treatments. Spatial extent is represented in the facets.
 
 </br>
 </br>

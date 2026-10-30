@@ -1,7 +1,45 @@
 ---
-title: "Appendix S3: BRMS models' validation after removing landscapes of the largest spatial extent"
+title: "Scale-Dependent Impacts of Beta Diversity on Temporal Stability via Spatial Asynchrony"
+author: "Julia Mayr, Merel B. Soons, Shaopeng Wang, Yann Hautier, Kathryn E. Barry"
+subtitle: "Ecology"
 output: html_document
 ---
+
+<style>
+/* Separate title page */
+#header {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Set display order */
+#header .title {
+  order: 1;
+}
+
+#header .author {
+  order: 2;
+}
+
+#header .subtitle {
+  order: 3;
+}
+
+/* Start appendix on a new printed page */
+@media print {
+  #header {
+    break-after: page;
+    page-break-after: always;
+  }
+}
+</style>
+
+<br>
+
+# Appendix S3: BRMS models' validation after removing landscapes of the largest spatial extent
 
 This appendix presents a sensitivity analysis in which landscapes of the largest spatial extent (8 communities) were removed prior to model fitting to evaluate model robustness, so that all models were fitted to landscapes composed of 2–7 communities.
 
@@ -58,16 +96,18 @@ filtered_data <- remove_outliers(data=scaling_data, vars=c("Spatial_AS","Gamma_s
 filtered_data <- normalize_min_max(data=filtered_data, var="Spatial_AS", epsilon = 0.0001, new_var_name = "Spatial_AS_normalized_offset")
 ```
 
-# 1. Effects of Beta Diversity and Spatial Extent on Spatial Asynchrony
+## 1. Effects of Beta Diversity and Spatial Extent on Spatial Asynchrony
 
 ```{r import model 1}
 model.SA<-readRDS("./models/SA_quantile.rds")
 ```
 
 
-## 1.1 Model and convergence diagnostics 
+### 1.1 Model and convergence diagnostics 
 
-**Table S3.1: Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
+<br>
+
+**Table S1: Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
 
 ```{r warning=FALSE}
 print(model.SA, digits = 3)
@@ -80,6 +120,8 @@ The Bayesian R-squared:
 bayes_R2(model.SA)
 ```
 
+<br>
+
 ```{r message=FALSE}
 mcmc_trace(as.array(model.SA)) + 
   scale_x_continuous(
@@ -88,15 +130,17 @@ mcmc_trace(as.array(model.SA)) +
   )
 ```
 
-**Figure S3.1: Trace plots allow visually assessing chain convergence.**
+**Figure S1: Trace plots allow visually assessing chain convergence.**
 
-## 1.2 Assessment of model fit and accuracy
+<br>
 
-### 1.2.1 Posterior predictive checks
+### 1.2 Assessment of model fit and accuracy
+
+#### 1.2.1 Posterior predictive checks
 
 We assess model fit using posterior predictive checks (PPC). PPCs compare the real data to the posterior distribution, conditioned on the observed data.
 
-#### 1.2.1.1 Density plot
+##### 1.2.1.1 Density plot
 
 ```{r}
 pp_check(model.SA, ndraws = 500) + 
@@ -105,19 +149,23 @@ pp_check(model.SA, ndraws = 500) +
   ylab("Density")
 ```
 
-**Figure S3.2: The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
+**Figure S2: The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
 
-#### 1.2.1.2 Leave-One-Out Cross-Validation
+<br>
+
+
+##### 1.2.1.2 Leave-One-Out Cross-Validation
 
 ```{r warning=FALSE, message=FALSE, results='hide'}
 pp_check(model.SA, type="loo_pit_qq")+ 
   theme_bw() 
 ```
 
-**Figure S3.3: The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
+**Figure S3: The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
 
+<br>
 
-### 1.2.2 Highest-density interval
+#### 1.2.2 Highest-density interval
 
 We report 89% instead of 95% following common Bayesian practices, as it provides a better balance of precision and interpretability (McElreath, 2020).
 
@@ -134,16 +182,21 @@ new_labels <- c( #create a vector with new parameter names that reflect the term
 
 ```
 
-**Figure S3.4: We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
+**Figure S4: We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
 
+<br>
 
-## 1.3 The Hierarchical Effect of Species Richness on Spatial Asynchrony
+### 1.3 The Hierarchical Effect of Species Richness on Spatial Asynchrony
 
-**Table S3.2: Summary table of the hierarchical effects of planted species richness on spatial asynchrony.**
+<br>
+
+**Table S2: Summary table of the hierarchical effects of planted species richness on spatial asynchrony.**
 
 ```{r}
 ranef(model.SA)
 ```
+
+<br>
 
 ```{r}
 model.SA %>% spread_draws(r_div[div,]) %>% # Extracts the posterior draws for r_div by each level of div
@@ -170,18 +223,21 @@ model.SA %>% spread_draws(r_div[div,]) %>% # Extracts the posterior draws for r_
 
 ```
 
-**Figure S3.5. Posterior distributions of the random effects of planted species richness levels on gamma stability, comparing differences between species richness levels.** Black points represent posterior medians, and horizontal black lines indicate the 66% and 95% credible intervals. The dashed vertical line at x = 0 serves as a reference for no difference. Deviations from zero indicate the magnitude and direction of the differences in spatial asynchrony between species richness levels.
+**Figure S5: Posterior distributions of the random effects of planted species richness levels on gamma stability, comparing differences between species richness levels.** Black points represent posterior medians, and horizontal black lines indicate the 66% and 95% credible intervals. The dashed vertical line at x = 0 serves as a reference for no difference. Deviations from zero indicate the magnitude and direction of the differences in spatial asynchrony between species richness levels.
 
+<br>
 
-# 2. Effects of Spatial Asynchony and Spatial Extent on Gamma Stability
+## 2. Effects of Spatial Asynchony and Spatial Extent on Gamma Stability
 
 ```{r import model 2}
 model.GS<-readRDS("./models/GS_quantile.rds")
 ```
 
-## 2.1 Model and convergence diagnostics 
+### 2.1 Model and convergence diagnostics 
 
-**Table S3.3: Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
+<br>
+
+**Table S3: Summary table of the BRMS model results.** The table summarizes the posterior distributions of the fixed effects and interaction terms. Reported values include the posterior means, standard errors, 95% credible intervals (CI), and effective sample sizes (Bulk ESS and Tail ESS) for each parameter.
 
 ```{r warning=FALSE}
 print(model.GS, digits = 3)
@@ -194,6 +250,8 @@ The Bayesian R-squared:
 bayes_R2(model.GS)
 ```
 
+<br>
+
 ```{r message=FALSE}
 mcmc_trace(as.array(model.GS)) + 
   scale_x_continuous(
@@ -202,15 +260,17 @@ mcmc_trace(as.array(model.GS)) +
   )
 ```
 
-**Figure S3.6: Trace plots allow visually assessing chain convergence.**
+**Figure S6: Trace plots allow visually assessing chain convergence.**
 
-## 2.2 Assessment of model fit and accuracy
+<br>
 
-### 2.2.1 Posterior predictive checks
+### 2.2 Assessment of model fit and accuracy
+
+#### 2.2.1 Posterior predictive checks
 
 We assess model fit using posterior predictive checks (PPC). PPCs compare the real data to the posterior distribution, conditioned on the observed data.
 
-#### 2.2.1.1 Density plot
+##### 2.2.1.1 Density plot
 
 ```{r}
 pp_check(model.GS, ndraws = 500) + 
@@ -219,19 +279,22 @@ pp_check(model.GS, ndraws = 500) +
   ylab("Density")
 ```
 
-Figure S3.7: The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
+**Figure S7: The density plot compares the real data (`y`, dark blue line) to the fitted draws of the models (`y_rep`, light blue lines).**
 
-#### 2.2.1.2 Leave-One-Out Cross-Validation
+<br>
+
+##### 2.2.1.2 Leave-One-Out Cross-Validation
 
 ```{r warning=FALSE, message=FALSE, results='hide'}
 pp_check(model.GS, type="loo_pit_qq")+ 
   theme_bw() 
 ```
 
-**Figure S3.8: The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
+**Figure S8: The LOO-PIT (Leave-One-Out Probability Integral Transform) calibration plot compares the empirical cumulative distribution of the LOO-PIT values (solid blue line) against the uniform distribution (dashed diagonal line).**
 
+<br>
 
-### 2.2.2 Highest-density interval
+#### 2.2.2 Highest-density interval
 
 We report 89% instead of 95% following common Bayesian practices, as it provides a better balance of precision and interpretability (McElreath, 2020).
 
@@ -248,17 +311,21 @@ new_labels <- c( #create a vector with new parameter names that reflect the term
 
 ```
 
-**Figure S3.9: We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
+**Figure S9: We use the highest density interval (HDI) for the main effects in the model to characterize uncertainty of our posterior distributions.** 
 
+<br>
 
-## 2.3 The Hierarchical Effect of Species Richness on Spatial Asynchrony
+### 2.3 The Hierarchical Effect of Species Richness on Spatial Asynchrony
 
-**Table S3.4: Summary table of the hierarchical effects of planted species richness on gamma stability.**
+<br>
+
+**Table S4: Summary table of the hierarchical effects of planted species richness on gamma stability.**
 
 ```{r}
 ranef(model.GS) 
 ```
 
+<br>
 
 ```{r}
 model.GS %>% spread_draws(r_div[div,]) %>% # Extracts the posterior draws for r_div by each level of div
@@ -285,5 +352,6 @@ model.GS %>% spread_draws(r_div[div,]) %>% # Extracts the posterior draws for r_
 
 ```
 
-**Figure S3.10. Posterior distributions of the random effects of planted species richness levels on gamma stability, comparing differences between species richness levels.** Black points represent posterior medians, and horizontal black lines indicate the 66% and 95% credible intervals. The dashed vertical line at x = 0 serves as a reference for no difference. Deviations from zero indicate the magnitude and direction of the differences in gamma stability between species richness levels.
+**Figure S10: Posterior distributions of the random effects of planted species richness levels on gamma stability, comparing differences between species richness levels.** Black points represent posterior medians, and horizontal black lines indicate the 66% and 95% credible intervals. The dashed vertical line at x = 0 serves as a reference for no difference. Deviations from zero indicate the magnitude and direction of the differences in gamma stability between species richness levels.
 
+<br>
