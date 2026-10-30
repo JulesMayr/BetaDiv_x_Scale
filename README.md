@@ -1,4 +1,4 @@
-# Mayr et al. ([date]) - Data and Code
+# Mayr et al. (2026) - Data and Code
 
 Dear reader,
 
@@ -12,7 +12,7 @@ To get started with this project, you can either download the folder directly or
 
 You can either download the project files directly from GitHub or clone the repository to your local machine.
 
-- **To download**: [Click here to download the ZIP file](<INSERT LINK TO ZIP>)
+- **To download**: [Click here to download the ZIP file](<https://github.com/JulesMayr/BetaDiv_x_Scale/archive/refs/heads/main.zip>)
 - **To clone**: use `git clone <https://github.com/JulesMayr/BetaDiv_x_Scale.git>`
 
 To open the project, double click on the BetaDivXScale_Code.Rproj file. This will open the project in RStudio and automatically set the working directory to the correct location, with relative paths properly configured.
@@ -44,6 +44,8 @@ install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOpt
 # Install CmdStan (this can take several minutes)
 cmdstanr::install_cmdstan()
 ```
+
+**We also provide pre-fitted model objects (.rds) in the relevant model folders in the hope of supporting downstream visualizations without having to install CmdStan or refit the models.**
 
 ## B. Project Structure
 
